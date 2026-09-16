@@ -7,6 +7,7 @@ import { LayersPanel } from '../../components/workbench/LayersPanel';
 import { ParametersPanel } from '../../components/workbench/ParametersPanel';
 import { ExportModal } from '../../components/workbench/ExportModal';
 import { FeedbackModal } from '../../components/workbench/FeedbackModal';
+import { ProcessingModal } from '../../components/workbench/ProcessingModal';
 import { useWorkbenchStore } from '../../stores/workbench-store';
 import { SAMPLE_IMAGES } from '../../lib/samples';
 
@@ -39,6 +40,7 @@ export default function WorkbenchPage() {
       </div>
 
       {/* Modals */}
+      <ProcessingModal />
       <ExportModal />
       <FeedbackModal />
     </div>
