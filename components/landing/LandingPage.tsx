@@ -50,6 +50,27 @@ export function LandingPage() {
     }
   };
 
+  // Clipboard Paste Support (Cmd+V / Ctrl+V)
+  React.useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (e.clipboardData?.items) {
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          const item = e.clipboardData.items[i];
+          if (item.type.indexOf('image') !== -1) {
+            const file = item.getAsFile();
+            if (file) {
+              handleFileUpload(file);
+              break;
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
+
   const handleSampleClick = async (sample: typeof SAMPLE_IMAGES[0]) => {
     setIsLoadingSample(true);
     try {
@@ -167,10 +188,10 @@ export function LandingPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-white text-base">
-                    Drop your image here, or <span className="text-brand-accent underline">browse files</span>
+                    Drop your image here, <span className="text-brand-accent underline">browse</span>, or press <kbd className="px-1.5 py-0.5 rounded bg-surface-50 border border-surface-border text-neutral-200 font-mono text-xs">Cmd+V</kbd>
                   </h3>
-                  <p className="text-xs text-neutral-400 mt-1">
-                    Supports PNG, JPG, WebP, BMP · Up to 20MB · Instant Vectorization
+                  <p className="text-xs text-neutral-400 mt-1.5">
+                    PNG, JPG, WebP, BMP · Instant Semantic Vectorization · 100% Free
                   </p>
                 </div>
               </div>

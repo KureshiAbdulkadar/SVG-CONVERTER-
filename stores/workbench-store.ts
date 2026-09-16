@@ -81,6 +81,10 @@ interface WorkbenchState {
   setPan: (pan: { x: number; y: number }) => void;
   resetView: () => void;
   toggleShowNodes: () => void;
+  activeStep: 1 | 2 | 3 | 4;
+  copiedToast: boolean;
+  setActiveStep: (step: 1 | 2 | 3 | 4) => void;
+  setCopiedToast: (v: boolean) => void;
   isLayersOpen: boolean;
   isParamsOpen: boolean;
   toggleLayersPanel: () => void;
@@ -133,7 +137,9 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   isFeedbackModalOpen: false,
   isExportModalOpen: false,
   isLayersOpen: false,
-  isParamsOpen: true,
+  isParamsOpen: false,
+  activeStep: 2,
+  copiedToast: false,
 
   history: [],
   historyIndex: -1,
@@ -464,6 +470,8 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   toggleShowNodes: () => set(state => ({ showNodes: !state.showNodes })),
   toggleLayersPanel: () => set(state => ({ isLayersOpen: !state.isLayersOpen })),
   toggleParamsPanel: () => set(state => ({ isParamsOpen: !state.isParamsOpen })),
+  setActiveStep: (step) => set({ activeStep: step }),
+  setCopiedToast: (v) => set({ copiedToast: v }),
   setFeedbackModalOpen: (open) => set({ isFeedbackModalOpen: open }),
   setExportModalOpen: (open) => set({ isExportModalOpen: open }),
 }));
