@@ -18,6 +18,7 @@ import {
   Palette,
   Circle,
   Hash,
+  X,
 } from 'lucide-react';
 import { useWorkbenchStore } from '../../stores/workbench-store';
 import { exportSingleLayerSvg } from '../../lib/vector-engine';
@@ -42,12 +43,16 @@ export function LayersPanel() {
     setSelectedLayer,
     setSelectedPath,
     setHoveredPath,
+    isLayersOpen,
+    toggleLayersPanel,
   } = useWorkbenchStore();
 
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState('');
   const [editingPathId, setEditingPathId] = useState<string | null>(null);
   const [editPathNameValue, setEditPathNameValue] = useState('');
+
+  if (!isLayersOpen) return null;
 
   const startRenameLayer = (id: string, currentName: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -83,22 +88,26 @@ export function LayersPanel() {
   };
 
   return (
-    <aside className="w-80 bg-sidebar border-r border-surface-border flex flex-col h-full select-none">
+    <aside className="w-80 bg-sidebar border-r border-surface-border flex flex-col h-full select-none animate-in slide-in-from-left duration-200">
       {/* Panel Header */}
       <div className="h-12 border-b border-surface-border px-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-brand-accent" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-neutral-200">
-            Vector Layer Groups
+          <span className="text-xs font-semibold text-neutral-200">
+            Layer Groups
           </span>
         </div>
         <div className="flex items-center gap-1.5 font-mono text-[10px] text-neutral-400">
-          <span className="px-2 py-0.5 rounded bg-surface-50 border border-surface-border">
-            {layers.length} Groups
-          </span>
-          <span className="px-2 py-0.5 rounded bg-brand-accent/15 text-brand-accent border border-brand-accent/25">
+          <span className="px-1.5 py-0.5 rounded bg-brand-accent/15 text-brand-accent border border-brand-accent/25">
             {layers.reduce((s, l) => s + l.paths.length, 0)} Paths
           </span>
+          <button
+            onClick={toggleLayersPanel}
+            title="Close Layers Panel"
+            className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-surface-100 transition-all ml-1"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 

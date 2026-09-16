@@ -15,12 +15,14 @@ import {
   ZoomOut,
   Maximize2,
   Layers,
-  Sliders,
+  SlidersHorizontal,
   CheckCircle2,
   Clock,
   Dot,
+  FileCode,
 } from 'lucide-react';
 import { useWorkbenchStore } from '../../stores/workbench-store';
+import { downloadBlob, exportVectorFile } from '../../lib/exporters';
 
 export function WorkbenchHeader() {
   const {
@@ -33,10 +35,15 @@ export function WorkbenchHeader() {
     viewMode,
     showNodes,
     zoom,
+    layers,
+    isLayersOpen,
+    isParamsOpen,
     undo,
     redo,
     setViewMode,
     toggleShowNodes,
+    toggleLayersPanel,
+    toggleParamsPanel,
     setZoom,
     resetView,
     setExportModalOpen,
@@ -46,73 +53,78 @@ export function WorkbenchHeader() {
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
 
+  const handleQuickDownload = async () => {
+    if (!outputSvg) return;
+    try {
+      const { blob, filename } = await exportVectorFile({
+        format: 'svg',
+        filename: fileName || 'vectorforge-export',
+        width: meta?.width || 500,
+        height: meta?.height || 500,
+        layers,
+      });
+      downloadBlob(blob, filename);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
-    <header className="h-14 bg-surface-200 border-b border-surface-border px-4 flex items-center justify-between select-none z-30">
-      {/* Left Section: Back, Title, Meta */}
+    <header className="h-14 bg-surface-200/90 backdrop-blur-md border-b border-surface-border px-4 flex items-center justify-between select-none z-30">
+      {/* Left: Back, Filename & Simple Status */}
       <div className="flex items-center gap-3">
         <Link
           href="/"
-          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-surface-100 transition-colors flex items-center gap-1.5 text-xs font-medium"
+          className="px-2.5 py-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-surface-100 transition-colors flex items-center gap-1.5 text-xs font-medium"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Exit</span>
+          <span className="hidden sm:inline">Home</span>
         </Link>
 
         <div className="h-4 w-px bg-surface-border" />
 
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm text-white tracking-tight flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
-            {fileName}
+          <span className="font-semibold text-xs sm:text-sm text-white tracking-tight flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-brand-500 shadow-[0_0_8px_#22c55e]" />
+            <span className="max-w-[140px] sm:max-w-[200px] truncate">{fileName}</span>
           </span>
 
           {meta && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-surface-50 text-neutral-300 font-mono border border-surface-border">
-              {meta.imageType.toUpperCase()} · {meta.width}×{meta.height}
+            <span className="hidden md:inline-flex text-[11px] px-2 py-0.5 rounded-full bg-surface-50 text-neutral-400 font-mono border border-surface-border">
+              {meta.width}×{meta.height}
             </span>
           )}
-
-          {isProcessing ? (
-            <span className="flex items-center gap-1 text-[11px] text-amber-400 bg-amber-950/40 border border-amber-800/50 px-2 py-0.5 rounded-full">
-              <Clock className="w-3 h-3 animate-spin" /> Vectorizing...
-            </span>
-          ) : meta ? (
-            <span className="flex items-center gap-1 text-[11px] text-brand-400 bg-brand-500/10 border border-brand-500/20 px-2 py-0.5 rounded-full">
-              <CheckCircle2 className="w-3 h-3" /> {meta.processingTimeMs}ms
-            </span>
-          ) : null}
         </div>
       </div>
 
-      {/* Middle Section: Undo/Redo, View Mode, Node Toggle, Zoom */}
-      <div className="flex items-center gap-1.5 bg-surface-100 p-1 rounded-xl border border-surface-border">
+      {/* Center: View Switcher (Compare / Vector / Original) */}
+      <div className="flex items-center gap-1 bg-surface-100 p-1 rounded-xl border border-surface-border">
         {/* Undo/Redo */}
         <button
           onClick={undo}
           disabled={!canUndo}
           title="Undo (Cmd+Z)"
-          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-surface-50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-surface-50 disabled:opacity-25 transition-colors"
         >
-          <Undo2 className="w-4 h-4" />
+          <Undo2 className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={redo}
           disabled={!canRedo}
           title="Redo (Cmd+Shift+Z)"
-          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-surface-50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-surface-50 disabled:opacity-25 transition-colors"
         >
-          <Redo2 className="w-4 h-4" />
+          <Redo2 className="w-3.5 h-3.5" />
         </button>
 
         <div className="h-4 w-px bg-surface-border mx-1" />
 
-        {/* View Modes */}
+        {/* View Mode Pills */}
         <button
           onClick={() => setViewMode('split')}
-          title="Split Compare View"
-          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+          className={`px-3 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
             viewMode === 'split'
-              ? 'bg-brand-accent text-white shadow-sm'
+              ? 'bg-brand-accent text-white shadow-sm shadow-indigo-950/40'
               : 'text-neutral-400 hover:text-white hover:bg-surface-50'
           }`}
         >
@@ -122,10 +134,9 @@ export function WorkbenchHeader() {
 
         <button
           onClick={() => setViewMode('vector')}
-          title="Vector Result View"
-          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+          className={`px-3 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
             viewMode === 'vector'
-              ? 'bg-brand-accent text-white shadow-sm'
+              ? 'bg-brand-accent text-white shadow-sm shadow-indigo-950/40'
               : 'text-neutral-400 hover:text-white hover:bg-surface-50'
           }`}
         >
@@ -135,8 +146,7 @@ export function WorkbenchHeader() {
 
         <button
           onClick={() => setViewMode('original')}
-          title="Original Raster View"
-          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
             viewMode === 'original'
               ? 'bg-brand-accent text-white shadow-sm'
               : 'text-neutral-400 hover:text-white hover:bg-surface-50'
@@ -145,66 +155,78 @@ export function WorkbenchHeader() {
           <span>Original</span>
         </button>
 
-        <div className="h-4 w-px bg-surface-border mx-1" />
+        <div className="hidden sm:block h-4 w-px bg-surface-border mx-1" />
 
-        {/* Node Points Toggle */}
-        <button
-          onClick={toggleShowNodes}
-          title="Toggle Anchor Points Inspector"
-          className={`px-2 py-1 rounded-lg text-xs font-mono transition-all flex items-center gap-1 ${
-            showNodes
-              ? 'bg-brand-500/20 text-brand-400 border border-brand-500/30'
-              : 'text-neutral-400 hover:text-white hover:bg-surface-50'
-          }`}
-        >
-          <Dot className="w-4 h-4 text-brand-400 -mr-1" />
-          <span>Nodes</span>
-        </button>
-
-        <div className="h-4 w-px bg-surface-border mx-1" />
-
-        {/* Zoom Controls */}
-        <div className="flex items-center gap-1 text-xs text-neutral-400 font-mono">
+        {/* Zoom */}
+        <div className="hidden sm:flex items-center gap-0.5 text-xs text-neutral-400 font-mono">
           <button
             onClick={() => setZoom(zoom - 0.2)}
             className="p-1 hover:text-white hover:bg-surface-50 rounded"
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
-          <span className="w-12 text-center">{Math.round(zoom * 100)}%</span>
+          <span className="w-10 text-center text-[11px]">{Math.round(zoom * 100)}%</span>
           <button
             onClick={() => setZoom(zoom + 0.2)}
             className="p-1 hover:text-white hover:bg-surface-50 rounded"
           >
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
-          <button
-            onClick={resetView}
-            title="Fit to View (100%)"
-            className="p-1 hover:text-white hover:bg-surface-50 rounded ml-0.5"
-          >
-            <Maximize2 className="w-3 h-3" />
-          </button>
         </div>
       </div>
 
-      {/* Right Section: Rate, Reprocess & Export */}
+      {/* Right: Panel Toggles & Export */}
       <div className="flex items-center gap-2">
+        {/* Toggle Layers Drawer */}
         <button
-          onClick={() => setFeedbackModalOpen(true)}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium text-neutral-300 hover:text-white hover:bg-surface-100 border border-surface-border transition-colors flex items-center gap-1.5"
+          onClick={toggleLayersPanel}
+          title="Toggle Layers Panel"
+          className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
+            isLayersOpen
+              ? 'bg-surface-50 border-brand-accent text-white shadow-sm'
+              : 'bg-surface-100 border-surface-border text-neutral-400 hover:text-white hover:bg-surface-50'
+          }`}
         >
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          <span>Rate Result</span>
+          <Layers className="w-3.5 h-3.5 text-indigo-400" />
+          <span className="hidden md:inline">Layers</span>
+          <span className="text-[10px] px-1 py-0.2 rounded bg-surface-200 text-neutral-400 font-mono">
+            {layers.length}
+          </span>
         </button>
 
+        {/* Toggle Settings/Params Drawer */}
+        <button
+          onClick={toggleParamsPanel}
+          title="Toggle Tuning Controls"
+          className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
+            isParamsOpen
+              ? 'bg-surface-50 border-brand-accent text-white shadow-sm'
+              : 'bg-surface-100 border-surface-border text-neutral-400 hover:text-white hover:bg-surface-50'
+          }`}
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5 text-brand-400" />
+          <span className="hidden md:inline">Tuning</span>
+        </button>
+
+        {/* Quick Download SVG button */}
+        <button
+          onClick={handleQuickDownload}
+          disabled={!outputSvg || isProcessing}
+          title="Quick Download SVG"
+          className="hidden sm:flex px-3 py-1.5 rounded-xl text-xs font-medium bg-surface-100 hover:bg-surface-50 border border-surface-border text-neutral-200 hover:text-white transition-all items-center gap-1.5 disabled:opacity-40"
+        >
+          <FileCode className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Save SVG</span>
+        </button>
+
+        {/* Export All Modal */}
         <button
           onClick={() => setExportModalOpen(true)}
           disabled={!outputSvg || isProcessing}
-          className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-brand-accent to-indigo-600 hover:from-brand-accentHover hover:to-indigo-500 text-white shadow-lg shadow-indigo-950/40 disabled:opacity-50 transition-all flex items-center gap-2"
+          className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-brand-accent to-indigo-600 hover:from-brand-accentHover hover:to-indigo-500 text-white shadow-lg shadow-indigo-950/40 disabled:opacity-40 transition-all flex items-center gap-1.5"
         >
           <Download className="w-3.5 h-3.5" />
-          <span>Export SVG / PDF</span>
+          <span>Export</span>
         </button>
       </div>
     </header>

@@ -81,6 +81,10 @@ interface WorkbenchState {
   setPan: (pan: { x: number; y: number }) => void;
   resetView: () => void;
   toggleShowNodes: () => void;
+  isLayersOpen: boolean;
+  isParamsOpen: boolean;
+  toggleLayersPanel: () => void;
+  toggleParamsPanel: () => void;
   setFeedbackModalOpen: (open: boolean) => void;
   setExportModalOpen: (open: boolean) => void;
 }
@@ -128,6 +132,8 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   hoveredPathId: null,
   isFeedbackModalOpen: false,
   isExportModalOpen: false,
+  isLayersOpen: false,
+  isParamsOpen: true,
 
   history: [],
   historyIndex: -1,
@@ -456,6 +462,8 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   setPan: (pan) => set({ pan }),
   resetView: () => set({ zoom: 1, pan: { x: 0, y: 0 }, splitPosition: 50 }),
   toggleShowNodes: () => set(state => ({ showNodes: !state.showNodes })),
+  toggleLayersPanel: () => set(state => ({ isLayersOpen: !state.isLayersOpen })),
+  toggleParamsPanel: () => set(state => ({ isParamsOpen: !state.isParamsOpen })),
   setFeedbackModalOpen: (open) => set({ isFeedbackModalOpen: open }),
   setExportModalOpen: (open) => set({ isExportModalOpen: open }),
 }));
