@@ -7,6 +7,7 @@ import {
   ColorPaletteItem,
   ImageType,
   VectorPreset,
+  SemanticRole,
 } from './types';
 import { rgbToLab, hexToRgb, isBrandColor } from './perceptual-color';
 import { composeSvg, minifySvgString } from './svg-generator';
@@ -211,87 +212,134 @@ export async function vectorizeImage(
   // Extract paths and group into semantic layers
   const rawPaths = parsePathsFromSvg(rawSvg);
 
-  const layerMap: Map<string, { paths: VectorPath[]; count: number }> = new Map();
+  // Categorize paths into Pro Designer Semantic Groups
+  const categories: Record<
+    SemanticRole,
+    { name: string; paths: VectorPath[]; colors: Set<string>; nodeCount: number }
+  > = {
+    'background': { name: '📁 Canvas Backdrop', paths: [], colors: new Set(), nodeCount: 0 },
+    'main-shape': { name: '📁 Primary Base Shapes', paths: [], colors: new Set(), nodeCount: 0 },
+    'shadow': { name: '📁 Shading & Midtones', paths: [], colors: new Set(), nodeCount: 0 },
+    'outline': { name: '📁 Outlines & Contours', paths: [], colors: new Set(), nodeCount: 0 },
+    'detail': { name: '📁 High-Detail Elements', paths: [], colors: new Set(), nodeCount: 0 },
+    'accent': { name: '📁 Highlights & Accents', paths: [], colors: new Set(), nodeCount: 0 },
+  };
+
+  const paletteMap = new Map<string, { count: number; hex: string }>();
   let totalNodes = 0;
   let totalPaths = 0;
 
   rawPaths.forEach((rp, idx) => {
-    // If background removal is on, skip 100% canvas full rect background paths
-    if (params.removeBackground && (rp.fill === '#ffffff' || rp.fill === '#fff' || rp.fill === '#000000')) {
-      if (rp.d.includes(`M0 0h${width}`) || rp.d.includes(`M0 0h${width}v${height}`)) {
-        return;
-      }
+    // Background check
+    const isBgPath =
+      (rp.fill === '#ffffff' || rp.fill === '#fff' || rp.fill === '#000000' || rp.fill === '#000') &&
+      (rp.d.startsWith('M0 0h') || rp.d.includes(`h${width}v${height}`));
+
+    if (params.removeBackground && isBgPath) {
+      return;
     }
 
     const nodeCount = countNodesInPath(rp.d);
     totalNodes += nodeCount;
     totalPaths++;
 
+    const colorHex = rp.fill.toLowerCase();
+    const rgb = hexToRgb(colorHex);
+    const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+    const maxC = Math.max(rgb.r, rgb.g, rgb.b);
+    const minC = Math.min(rgb.r, rgb.g, rgb.b);
+    const saturation = maxC === 0 ? 0 : (maxC - minC) / maxC;
+
+    // Track palette
+    const existing = paletteMap.get(colorHex) || { count: 0, hex: colorHex };
+    existing.count += nodeCount;
+    paletteMap.set(colorHex, existing);
+
+    // Determine semantic role
+    let role: SemanticRole = 'main-shape';
+    if (isBgPath) {
+      role = 'background';
+    } else if (luminance < 0.18 && nodeCount > 6) {
+      role = 'outline';
+    } else if (luminance > 0.85 || (saturation > 0.65 && maxC > 180)) {
+      role = 'accent';
+    } else if (luminance < 0.45 && saturation < 0.5) {
+      role = 'shadow';
+    } else if (nodeCount < 8) {
+      role = 'detail';
+    } else {
+      role = 'main-shape';
+    }
+
+    const pathName = `${role.toUpperCase()} #${categories[role].paths.length + 1} (${colorHex.toUpperCase()})`;
+
     const pathObj: VectorPath = {
       id: `path_${idx}`,
+      name: pathName,
       d: rp.d,
       fill: rp.fill,
       nodeCount,
-      area: 100,
+      area: nodeCount * 10,
       points: extractApproxPoints(rp.d),
       curves: [],
       isClosed: true,
+      visible: true,
     };
 
-    const colorKey = rp.fill.toLowerCase();
-    if (!layerMap.has(colorKey)) {
-      layerMap.set(colorKey, { paths: [], count: 0 });
-    }
-    const group = layerMap.get(colorKey)!;
-    group.paths.push(pathObj);
-    group.count += nodeCount;
+    categories[role].paths.push(pathObj);
+    categories[role].colors.add(colorHex);
+    categories[role].nodeCount += nodeCount;
   });
 
-  // Build semantic layers
+  // Build final structured layers
   const layers: VectorLayer[] = [];
-  const palette: ColorPaletteItem[] = [];
+  const roleOrder: SemanticRole[] = [
+    'background',
+    'main-shape',
+    'shadow',
+    'outline',
+    'detail',
+    'accent',
+  ];
 
   let layerIndex = 0;
-  for (const [colorHex, group] of layerMap.entries()) {
-    const rgb = hexToRgb(colorHex);
-    const lab = rgbToLab(rgb);
-    const isBrand = isBrandColor(rgb);
+  for (const role of roleOrder) {
+    const group = categories[role];
+    if (group.paths.length === 0) continue;
 
-    const isBg = layerIndex === 0 && (colorHex === '#ffffff' || colorHex === '#fff' || colorHex === '#000000');
-    const semanticRole = isBg
-      ? 'background'
-      : layerIndex === 1
-      ? 'main-shape'
-      : group.paths.length > 3
-      ? 'detail'
-      : 'accent';
-
-    const layerName = isBg
-      ? 'Background Layer'
-      : `Vector Group ${layerIndex + 1} (${colorHex.toUpperCase()})`;
+    const colorsArr = Array.from(group.colors);
+    const primaryColor = colorsArr[0] || '#6366f1';
 
     layers.push({
-      id: `layer_${layerIndex}_${colorHex.replace('#', '')}`,
-      name: layerName,
-      semanticRole,
-      color: colorHex,
+      id: `group_${role}`,
+      name: `${group.name} (${group.paths.length} ${group.paths.length === 1 ? 'path' : 'paths'})`,
+      semanticRole: role,
+      color: primaryColor,
+      colors: colorsArr,
       visible: true,
       locked: false,
+      expanded: true,
       paths: group.paths,
       depthRank: layerIndex,
-      nodeCount: group.count,
-    });
-
-    palette.push({
-      hex: colorHex,
-      rgb,
-      lab,
-      percentage: (group.paths.length / Math.max(1, rawPaths.length)) * 100,
-      isBrand,
+      nodeCount: group.nodeCount,
     });
 
     layerIndex++;
   }
+
+  // Build Palette items
+  const palette: ColorPaletteItem[] = [];
+  for (const [hex, item] of paletteMap.entries()) {
+    const rgb = hexToRgb(hex);
+    palette.push({
+      hex,
+      rgb,
+      lab: rgbToLab(rgb),
+      percentage: totalNodes > 0 ? (item.count / totalNodes) * 100 : 0,
+      isBrand: isBrandColor(rgb),
+    });
+  }
+  palette.sort((a, b) => b.percentage - a.percentage);
 
   // Compose final clean SVG and minified SVG
   const finalSvg = composeSvg(

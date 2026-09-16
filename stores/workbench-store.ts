@@ -65,8 +65,12 @@ interface WorkbenchState {
   undo: () => void;
   redo: () => void;
   toggleLayerVisibility: (layerId: string) => void;
+  toggleLayerExpanded: (layerId: string) => void;
+  togglePathVisibility: (layerId: string, pathId: string) => void;
   setLayerColor: (layerId: string, hex: string) => void;
+  setPathColor: (layerId: string, pathId: string, hex: string) => void;
   renameLayer: (layerId: string, name: string) => void;
+  renamePath: (layerId: string, pathId: string, name: string) => void;
   reorderLayers: (startIndex: number, endIndex: number) => void;
   setSelectedLayer: (id: string | null) => void;
   setSelectedPath: (id: string | null) => void;
@@ -322,8 +326,34 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   },
 
   toggleLayerVisibility: (layerId) => {
-    const { layers, imageWidth, imageHeight, meta } = get();
+    const { layers, imageWidth, imageHeight } = get();
     const updated = layers.map(l => (l.id === layerId ? { ...l, visible: !l.visible } : l));
+    const newSvg = composeSvg(updated, { width: imageWidth, height: imageHeight });
+
+    set({
+      layers: updated,
+      outputSvg: newSvg,
+      minifiedSvg: minifySvgString(newSvg),
+    });
+  },
+
+  toggleLayerExpanded: (layerId) => {
+    const { layers } = get();
+    const updated = layers.map(l => (l.id === layerId ? { ...l, expanded: !l.expanded } : l));
+    set({ layers: updated });
+  },
+
+  togglePathVisibility: (layerId, pathId) => {
+    const { layers, imageWidth, imageHeight } = get();
+    const updated = layers.map(l => {
+      if (l.id === layerId) {
+        return {
+          ...l,
+          paths: l.paths.map(p => (p.id === pathId ? { ...p, visible: p.visible === false ? true : false } : p)),
+        };
+      }
+      return l;
+    });
     const newSvg = composeSvg(updated, { width: imageWidth, height: imageHeight });
 
     set({
@@ -354,11 +384,50 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     });
   },
 
+  setPathColor: (layerId, pathId, hex) => {
+    const { layers, imageWidth, imageHeight } = get();
+    const updated = layers.map(l => {
+      if (l.id === layerId) {
+        return {
+          ...l,
+          paths: l.paths.map(p => (p.id === pathId ? { ...p, fill: hex } : p)),
+        };
+      }
+      return l;
+    });
+
+    const newSvg = composeSvg(updated, { width: imageWidth, height: imageHeight });
+    set({
+      layers: updated,
+      outputSvg: newSvg,
+      minifiedSvg: minifySvgString(newSvg),
+    });
+  },
+
   renameLayer: (layerId, name) => {
     const { layers, imageWidth, imageHeight } = get();
     const updated = layers.map(l => (l.id === layerId ? { ...l, name } : l));
     const newSvg = composeSvg(updated, { width: imageWidth, height: imageHeight });
 
+    set({
+      layers: updated,
+      outputSvg: newSvg,
+    });
+  },
+
+  renamePath: (layerId, pathId, name) => {
+    const { layers, imageWidth, imageHeight } = get();
+    const updated = layers.map(l => {
+      if (l.id === layerId) {
+        return {
+          ...l,
+          paths: l.paths.map(p => (p.id === pathId ? { ...p, name } : p)),
+        };
+      }
+      return l;
+    });
+
+    const newSvg = composeSvg(updated, { width: imageWidth, height: imageHeight });
     set({
       layers: updated,
       outputSvg: newSvg,

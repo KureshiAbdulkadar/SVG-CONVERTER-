@@ -47,14 +47,18 @@ export function composeSvg(
       `id="${layer.id}"`,
       `data-name="${escapeXml(layer.name)}"`,
       `data-role="${layer.semanticRole}"`,
-      `fill="${layer.color}"`,
       figmaCompatible ? `figma:type="FRAME"` : '',
+      `inkscape:groupmode="layer"`,
+      `inkscape:label="${escapeXml(layer.name)}"`,
     ]
       .filter(Boolean)
       .join(' ');
 
-    const pathsStr = layer.paths
-      .map(p => `    <path id="${p.id}" fill-rule="evenodd" d="${p.d}" fill="${p.fill || layer.color}" />`)
+    const visiblePaths = layer.paths.filter(p => p.visible !== false);
+    if (visiblePaths.length === 0) continue;
+
+    const pathsStr = visiblePaths
+      .map(p => `    <path id="${p.id}" data-name="${escapeXml(p.name || p.id)}" fill-rule="evenodd" d="${p.d}" fill="${p.fill || layer.color}" />`)
       .join(minify ? '' : '\n');
 
     if (minify) {

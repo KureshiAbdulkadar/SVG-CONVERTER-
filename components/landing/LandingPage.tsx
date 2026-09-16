@@ -142,12 +142,25 @@ export function LandingPage() {
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`relative p-10 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
+              className={`relative p-10 rounded-2xl border-2 border-dashed cursor-pointer transition-all overflow-hidden ${
                 isDragging
                   ? 'border-brand-accent bg-brand-accent/10 scale-[1.01]'
                   : 'border-surface-border bg-surface-200/50 hover:bg-surface-200/80 hover:border-neutral-500'
               }`}
             >
+              {/* Laser Scanning Overlay during upload/sample process */}
+              {isLoadingSample && (
+                <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center">
+                  <div className="absolute left-0 right-0 h-20 bg-gradient-to-b from-transparent via-cyan-400/25 to-transparent -translate-y-full animate-[scanVertical_1.4s_ease-in-out_infinite]">
+                    <div className="absolute bottom-1/2 left-0 right-0 h-0.5 bg-cyan-300 shadow-[0_0_15px_#38bdf8]" />
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-semibold text-cyan-300 bg-surface-100/90 px-4 py-2 rounded-full border border-cyan-500/40 shadow-lg">
+                    <Sparkles className="w-4 h-4 text-cyan-400 animate-spin" />
+                    <span>Analyzing Image Semantics...</span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col items-center gap-3">
                 <div className="w-14 h-14 rounded-2xl bg-surface-100 border border-surface-border flex items-center justify-center text-brand-accent shadow-xl">
                   <Upload className="w-6 h-6" />

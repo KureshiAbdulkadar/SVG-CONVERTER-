@@ -2,21 +2,29 @@ export type ImageType = 'logo' | 'photo' | 'icon' | 'sketch' | 'illustration';
 
 export type VectorPreset = 'sharp' | 'balanced' | 'smooth' | 'custom';
 
+export type SemanticRole =
+  | 'background'
+  | 'main-shape'
+  | 'shadow'
+  | 'outline'
+  | 'detail'
+  | 'accent';
+
 export interface VectorParameters {
   preset: VectorPreset;
   imageType: ImageType;
   colorCount: number; // 0 = auto, 2-64
   preserveBrandColors: boolean;
   smoothness: number; // 0.0 - 1.0
-  cornerSharpness: number; // 0.0 - 1.0 (higher = keeps sharp corners)
-  detail: number; // 0.0 - 1.0 (Douglas-Peucker epsilon sensitivity)
+  cornerSharpness: number; // 0.0 - 1.0
+  detail: number; // 0.0 - 1.0
   noiseRemoval: number; // 0 - 50 px area threshold
   preserveSymmetry: boolean;
   gridSnap: boolean;
-  gridSize: number; // 8, 16, 24, 32
+  gridSize: number;
   removeBackground: boolean;
   mergeSimilarPaths: boolean;
-  fillOverlap: boolean; // slightly expands paths to eliminate subpixel gaps
+  fillOverlap: boolean;
 }
 
 export interface RGBColor {
@@ -54,6 +62,7 @@ export interface BezierCurve {
 
 export interface VectorPath {
   id: string;
+  name?: string;
   d: string;
   fill: string;
   stroke?: string;
@@ -65,15 +74,18 @@ export interface VectorPath {
   curves: BezierCurve[];
   isClosed: boolean;
   layerId?: string;
+  visible?: boolean;
 }
 
 export interface VectorLayer {
   id: string;
   name: string;
-  semanticRole: 'background' | 'main-shape' | 'detail' | 'accent' | 'outline' | 'shadow';
+  semanticRole: SemanticRole;
   color: string;
+  colors?: string[]; // Multiple swatches in this group
   visible: boolean;
   locked: boolean;
+  expanded?: boolean;
   paths: VectorPath[];
   depthRank: number; // 0 = back, N = front
   nodeCount: number;
