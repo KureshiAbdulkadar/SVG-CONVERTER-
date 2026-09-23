@@ -65,6 +65,7 @@ export interface VectorPath {
   name?: string;
   d: string;
   fill: string;
+  fillRule?: string;
   stroke?: string;
   strokeWidth?: number;
   opacity?: number;

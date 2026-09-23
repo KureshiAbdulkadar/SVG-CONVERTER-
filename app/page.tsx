@@ -1,5 +1,5 @@
-import { LandingPage } from '../components/landing/LandingPage';
+import { SvgConverterApp } from '../components/converter/SvgConverterApp';
 
 export default function Home() {
-  return <LandingPage />;
+  return <SvgConverterApp />;
 }

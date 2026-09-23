@@ -311,6 +311,18 @@ export const SAMPLE_IMAGES: SampleItem[] = [
       ctx.closePath();
       ctx.fill();
 
+      // Sharp White Snow Peak on Foreground Crest
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(190, 240);
+      ctx.lineTo(210, 260);
+      ctx.lineTo(198, 255);
+      ctx.lineTo(190, 265);
+      ctx.lineTo(182, 255);
+      ctx.lineTo(170, 260);
+      ctx.closePath();
+      ctx.fill();
+
       return canvas.toDataURL('image/png');
     },
   },

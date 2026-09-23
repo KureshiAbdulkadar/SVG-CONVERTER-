@@ -58,7 +58,7 @@ export function composeSvg(
     if (visiblePaths.length === 0) continue;
 
     const pathsStr = visiblePaths
-      .map(p => `    <path id="${p.id}" data-name="${escapeXml(p.name || p.id)}" fill-rule="evenodd" d="${p.d}" fill="${p.fill || layer.color}" />`)
+      .map(p => `    <path id="${p.id}" data-name="${escapeXml(p.name || p.id)}" fill-rule="${p.fillRule || 'evenodd'}" d="${p.d}" fill="${p.fill || layer.color}" />`)
       .join(minify ? '' : '\n');
 
     if (minify) {
