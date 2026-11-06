@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>VectorForge · Visual attention review</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: #f1f3f1;
+      color: #202a25;
+      font:
+        15px/1.6 system-ui,
+        sans-serif;
+    }
+    main {
+      max-width: 1440px;
+      margin: auto;
+    }
+    h1 {
+      font-size: 26px;
+      letter-spacing: -0.03em;
+      margin: 0 0 8px;
+    }
+    p {
+      max-width: 85ch;
+      color: #566158;
+    }
+    button {
+      font: inherit;
+      border: 1px solid #bcc6bd;
+      border-radius: 6px;
+      padding: 8px 15px;
+      background: white;
+      color: #202a25;
+      cursor: pointer;
+      margin: 10px 0 20px;
+    }
+    button:focus-visible {
+      outline: 2px solid #2e6851;
+      outline-offset: 4px;
+    }
+    .canvas {
+      position: relative;
+      border: 1px solid #d6ddd4;
+      overflow: hidden;
+      border-radius: 12px;
+      background: white;
+    }
+    .canvas img {
+      display: block;
+      width: 100%;
+    }
+    .heat {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(
+          ellipse 11% 10% at 31.4% 55%,
+          #ff2d0080,
+          #ffc40055 40%,
+          transparent 100%
+        ),
+        radial-gradient(
+          ellipse 11% 17% at 69.6% 51%,
+          #ff990066,
+          #fff30033 45%,
+          transparent 100%
+        ),
+        radial-gradient(
+          ellipse 13% 6% at 50.5% 21.5%,
+          #ff99004d,
+          transparent 100%
+        );
+    }
+    .heat span {
+      position: absolute;
+      background: #202a25;
+      color: white;
+      border: 2px solid white;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .one {
+      left: 30.4%;
+      top: 53.5%;
+    }
+    .two {
+      left: 68.6%;
+      top: 49.5%;
+    }
+    .three {
+      left: 49.5%;
+      top: 20%;
+    }
+    li {
+      margin-bottom: 10px;
+    }
+    strong {
+      color: #202a25;
+    }
+    .off .heat {
+      display: none;
+    }
+    a {
+      color: #24533f;
+    }
+    @media (max-width: 600px) {
+      body {
+        padding: 16px;
+      }
+      .heat span {
+        width: 18px;
+        height: 18px;
+        font-size: 10px;
+      }
+    }
+  </style>
+  <main>
+    <h1>Visual attention review</h1>
+    <p>
+      <strong
+        >Heuristic overlay — not collected eye-tracking or click data.</strong
+      >
+      The zones below illustrate expected visual emphasis from colour, scale,
+      placement and affordance. They do not predict fixation duration or
+      conversion rates.
+    </p>
+    <button
+      aria-pressed="true"
+      onclick="
+        const off = document.querySelector('.canvas').classList.toggle('off');
+        this.setAttribute('aria-pressed', !off);
+        this.textContent = off
+          ? 'Show attention zones'
+          : 'Hide attention zones';
+      "
+    >
+      Hide attention zones
+    </button>
+    <div class="canvas">
+      <img
+        src="desktop.jpg"
+        alt="Desktop converter with one upload action and a vector specimen"
+      />
+      <div class="heat" aria-hidden="true">
+        <span class="one">1</span><span class="two">2</span
+        ><span class="three">3</span>
+      </div>
+    </div>
+    <ol>
+      <li>
+        <strong>Choose image:</strong> the sole filled action, close to upload
+        instructions. This is the intended task destination.
+      </li>
+      <li>
+        <strong>Artwork specimen:</strong> gives a concrete explanation of
+        pixels becoming paths. Its colour may attract the first glance; this is
+        an assumption to test with users.
+      </li>
+      <li>
+        <strong>Image to SVG:</strong> names the task immediately. Help and
+        sample actions remain secondary.
+      </li>
+    </ol>
+    <p>
+      At phone widths the upload action appears above the specimen. On the
+      result screen, Download SVG becomes the only filled action, and the
+      preview provides the evidence for that decision. Layers and finer tracing
+      remain optional.
+    </p>
+    <p>
+      <strong>Next validation:</strong> observe first-time users finding upload,
+      comparing edges and downloading without prompts. Record task success,
+      hesitation and time to download. Real heatmaps require consented sessions
+      and sufficient traffic; no tracking was added to the product.
+    </p>
+    <p>
+      <a href="mobile.jpg">Phone layout</a> ·
+      <a href="result.png">Result layout</a> ·
+      <a href="mobile-layers.png">Phone layer inspector</a>
+    </p>
+  </main>
+</html>

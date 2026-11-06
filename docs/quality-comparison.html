@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>VectorForge conversion quality</title
+  ><style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font:
+        15px/1.6 system-ui,
+        sans-serif;
+      margin: 0;
+      background: #f1f3f1;
+      color: #202a25;
+      padding: 32px;
+    }
+    main {
+      max-width: 1150px;
+      margin: auto;
+    }
+    h1 {
+      font-size: 30px;
+      letter-spacing: -0.03em;
+      margin: 0 0 12px;
+    }
+    h2 {
+      font-size: 20px;
+      margin: 0;
+    }
+    p {
+      max-width: 90ch;
+      color: #59635b;
+    }
+    article {
+      border-top: 1px solid #d4dcd2;
+      padding: 24px 0;
+      margin-top: 24px;
+    }
+    .images {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    figure {
+      margin: 0;
+    }
+    img {
+      display: block;
+      background: var(--image-ground, #fff);
+      width: 100%;
+      height: auto;
+      border: 1px solid #d9dfd6;
+      border-radius: 8px;
+    }
+    figcaption {
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    button {
+      font: inherit;
+      padding: 9px 16px;
+      background: white;
+      border: 1px solid #b8c5b9;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:focus-visible,
+    a:focus-visible {
+      outline: 2px solid #2e6851;
+      outline-offset: 4px;
+    }
+    a {
+      color: #255c43;
+      text-underline-offset: 4px;
+      font-size: 13px;
+    }
+    article > a {
+      display: inline-block;
+      margin-top: 12px;
+    }
+    .dark {
+      --image-ground: #181b19;
+    }
+    @media (max-width: 700px) {
+      body {
+        padding: 18px;
+      }
+      .images {
+        grid-template-columns: 1fr;
+      }
+      img {
+        max-width: 355px;
+      }
+      figure {
+        margin-bottom: 12px;
+      }
+    }
+  </style>
+  <main>
+    <h1>Conversion quality: before and after</h1>
+    <p>
+      Controlled low-resolution fixtures rendered at a non-integer enlargement
+      (96 pixels → 355 pixels). The known vector reference supplies a measurable
+      reconstruction target. These are synthetic tests, not a claim about every
+      uploaded image or a competitor ranking.
+    </p>
+    <p>
+      The new engine enlarges suitable flat artwork before tracing, recovers
+      coherent colours and adds interior coverage to prevent see-through seams.
+      Native sampling is retained for delicate collections of marks and genuine
+      partial transparency.
+    </p>
+    <button
+      aria-pressed="false"
+      onclick="
+        const dark = document.body.classList.toggle('dark');
+        this.setAttribute('aria-pressed', dark);
+        this.textContent = dark
+          ? 'Use white preview background'
+          : 'Use dark preview background';
+      "
+    >
+      Use dark preview background
+    </button>
+    <article>
+      <h2>Curved mark and counter</h2>
+      <p>
+        74.2% lower rendering error · Interior leak pixels: 0 → 0 · 4× working
+        scale
+      </p>
+      <div class="images">
+        <figure>
+          <img
+            src="quality/curved-logo-previous.png"
+            alt="Curved mark and counter, previous converter"
+          />
+          <figcaption>Previous converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/curved-logo-current.png"
+            alt="Curved mark and counter, updated converter"
+          />
+          <figcaption>Updated converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/curved-logo-truth.png"
+            alt="Curved mark and counter, known vector reference"
+          />
+          <figcaption>Known vector reference</figcaption>
+        </figure>
+      </div>
+      <a href="quality/curved-logo.svg">Open the updated SVG</a>
+    </article>
+    <article>
+      <h2>Touching colours and a narrow accent</h2>
+      <p>
+        64.6% lower rendering error · Interior leak pixels: 2,365 → 8 · 4×
+        working scale
+      </p>
+      <div class="images">
+        <figure>
+          <img
+            src="quality/shared-colours-previous.png"
+            alt="Touching colours and a narrow accent, previous converter"
+          />
+          <figcaption>Previous converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/shared-colours-current.png"
+            alt="Touching colours and a narrow accent, updated converter"
+          />
+          <figcaption>Updated converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/shared-colours-truth.png"
+            alt="Touching colours and a narrow accent, known vector reference"
+          />
+          <figcaption>Known vector reference</figcaption>
+        </figure>
+      </div>
+      <a href="quality/shared-colours.svg">Open the updated SVG</a>
+    </article>
+    <article>
+      <h2>Fine connected linework</h2>
+      <p>
+        63.2% lower rendering error · Interior leak pixels: 0 → 0 · 4× working
+        scale
+      </p>
+      <div class="images">
+        <figure>
+          <img
+            src="quality/thin-bridges-previous.png"
+            alt="Fine connected linework, previous converter"
+          />
+          <figcaption>Previous converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/thin-bridges-current.png"
+            alt="Fine connected linework, updated converter"
+          />
+          <figcaption>Updated converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/thin-bridges-truth.png"
+            alt="Fine connected linework, known vector reference"
+          />
+          <figcaption>Known vector reference</figcaption>
+        </figure>
+      </div>
+      <a href="quality/thin-bridges.svg">Open the updated SVG</a>
+    </article>
+    <article>
+      <h2>Delicate lettering on transparency</h2>
+      <p>
+        Previous rendering error retained · Interior leak pixels: 0 → 0 · 1×
+        working scale
+      </p>
+      <div class="images">
+        <figure>
+          <img
+            src="quality/small-type-previous.png"
+            alt="Delicate lettering on transparency, previous converter"
+          />
+          <figcaption>Previous converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/small-type-current.png"
+            alt="Delicate lettering on transparency, updated converter"
+          />
+          <figcaption>Updated converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/small-type-truth.png"
+            alt="Delicate lettering on transparency, known vector reference"
+          />
+          <figcaption>Known vector reference</figcaption>
+        </figure>
+      </div>
+      <a href="quality/small-type.svg">Open the updated SVG</a>
+    </article>
+    <article>
+      <h2>Opaque illustration</h2>
+      <p>
+        54.2% lower rendering error · Interior leak pixels: 2,733 → 0 · 4×
+        working scale
+      </p>
+      <div class="images">
+        <figure>
+          <img
+            src="quality/opaque-art-previous.png"
+            alt="Opaque illustration, previous converter"
+          />
+          <figcaption>Previous converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/opaque-art-current.png"
+            alt="Opaque illustration, updated converter"
+          />
+          <figcaption>Updated converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/opaque-art-truth.png"
+            alt="Opaque illustration, known vector reference"
+          />
+          <figcaption>Known vector reference</figcaption>
+        </figure>
+      </div>
+      <a href="quality/opaque-art.svg">Open the updated SVG</a>
+    </article>
+    <article>
+      <h2>Genuine translucency</h2>
+      <p>
+        Previous rendering error retained · Interior leak pixels: 0 → 0 · 1×
+        working scale
+      </p>
+      <div class="images">
+        <figure>
+          <img
+            src="quality/translucent-previous.png"
+            alt="Genuine translucency, previous converter"
+          />
+          <figcaption>Previous converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/translucent-current.png"
+            alt="Genuine translucency, updated converter"
+          />
+          <figcaption>Updated converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/translucent-truth.png"
+            alt="Genuine translucency, known vector reference"
+          />
+          <figcaption>Known vector reference</figcaption>
+        </figure>
+      </div>
+      <a href="quality/translucent.svg">Open the updated SVG</a>
+    </article>
+    <article>
+      <h2>Small lettering on white</h2>
+      <p>
+        4.3% lower rendering error · Interior leak pixels: 4,100 → 0 · 1×
+        working scale
+      </p>
+      <div class="images">
+        <figure>
+          <img
+            src="quality/small-type-opaque-previous.png"
+            alt="Small lettering on white, previous converter"
+          />
+          <figcaption>Previous converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/small-type-opaque-current.png"
+            alt="Small lettering on white, updated converter"
+          />
+          <figcaption>Updated converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/small-type-opaque-truth.png"
+            alt="Small lettering on white, known vector reference"
+          />
+          <figcaption>Known vector reference</figcaption>
+        </figure>
+      </div>
+      <a href="quality/small-type-opaque.svg">Open the updated SVG</a>
+    </article>
+    <article>
+      <h2>Compressed JPEG artwork</h2>
+      <p>
+        23.6% lower rendering error · Interior leak pixels: 18,951 → 0 · 1×
+        working scale
+      </p>
+      <div class="images">
+        <figure>
+          <img
+            src="quality/compressed-jpeg-previous.png"
+            alt="Compressed JPEG artwork, previous converter"
+          />
+          <figcaption>Previous converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/compressed-jpeg-current.png"
+            alt="Compressed JPEG artwork, updated converter"
+          />
+          <figcaption>Updated converter</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="quality/compressed-jpeg-truth.png"
+            alt="Compressed JPEG artwork, known vector reference"
+          />
+          <figcaption>Known vector reference</figcaption>
+        </figure>
+      </div>
+      <a href="quality/compressed-jpeg.svg">Open the updated SVG</a>
+    </article>
+    <p>
+      The error metric averages RGB differences over white and dark backgrounds.
+      Interior leaks count pixels which should be fully opaque away from the
+      true silhouette but render below alpha 250. Smaller values are better.
+      Upscaling cannot recreate detail that the source no longer contains.
+    </p>
+  </main>
+</html>

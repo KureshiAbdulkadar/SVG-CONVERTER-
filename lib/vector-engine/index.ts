@@ -1,4 +1,4 @@
-import { trace, createImage } from 'vecline/core';
+import { trace, countPathNodes, type TraceOptions } from "vecline/core";
 import {
   VectorParameters,
   VectorResult,
@@ -7,24 +7,28 @@ import {
   ColorPaletteItem,
   ImageType,
   VectorPreset,
-  SemanticRole,
-} from './types';
-import { rgbToLab, hexToRgb, isBrandColor } from './perceptual-color';
-import { composeSvg, minifySvgString } from './svg-generator';
-import { enhanceAndUpscaleImage } from './upscaler';
+} from "./types";
+import { rgbToLab, hexToRgb, isBrandColor } from "./perceptual-color";
+import { composeSvg, minifySvgString } from "./svg-generator";
+import {
+  analyseArtwork,
+  upscaleForTracing,
+  opaqueInteriorPath,
+} from "./preprocess";
 
-export * from './types';
-export * from './perceptual-color';
-export * from './curve-fitting';
-export * from './corner-detection';
-export * from './symmetry';
-export * from './grid-snap';
-export * from './svg-generator';
-export * from './upscaler';
+export * from "./types";
+export * from "./perceptual-color";
+export * from "./curve-fitting";
+export * from "./corner-detection";
+export * from "./symmetry";
+export * from "./grid-snap";
+export * from "./svg-generator";
+export * from "./upscaler";
+export * from "./preprocess";
 
 export const PRESET_CONFIGS: Record<VectorPreset, Partial<VectorParameters>> = {
   sharp: {
-    preset: 'sharp',
+    preset: "sharp",
     smoothness: 0.15,
     cornerSharpness: 0.95,
     detail: 0.95,
@@ -36,7 +40,7 @@ export const PRESET_CONFIGS: Record<VectorPreset, Partial<VectorParameters>> = {
     fillOverlap: true,
   },
   balanced: {
-    preset: 'balanced',
+    preset: "balanced",
     smoothness: 0.45,
     cornerSharpness: 0.8,
     detail: 0.8,
@@ -48,7 +52,7 @@ export const PRESET_CONFIGS: Record<VectorPreset, Partial<VectorParameters>> = {
     fillOverlap: true,
   },
   smooth: {
-    preset: 'smooth',
+    preset: "smooth",
     smoothness: 0.75,
     cornerSharpness: 0.5,
     detail: 0.65,
@@ -60,16 +64,13 @@ export const PRESET_CONFIGS: Record<VectorPreset, Partial<VectorParameters>> = {
     fillOverlap: true,
   },
   custom: {
-    preset: 'custom',
+    preset: "custom",
   },
 };
 
 // Count SVG path nodes accurately from path string
 export function countNodesInPath(d: string): number {
-  if (!d) return 0;
-  const commands = d.match(/[MmLlHhVvCcSsQqTtAaZz]/g);
-  if (!commands) return 4;
-  return Math.max(3, commands.length * 2);
+  return d ? countPathNodes(d) : 0;
 }
 
 // Extract approximate points from path for node inspector overlay
@@ -93,7 +94,7 @@ function extractApproxPoints(d: string): { x: number; y: number }[] {
 export function classifyImageHeuristic(
   pixelData: Uint8ClampedArray,
   width: number,
-  height: number
+  height: number,
 ): ImageType {
   const totalPixels = width * height;
   let nonTransparent = 0;
@@ -126,37 +127,59 @@ export function classifyImageHeuristic(
     }
   }
 
-  if (nonTransparent === 0) return 'logo';
+  if (nonTransparent === 0) return "logo";
 
   const grayscaleRatio = grayscaleSum / nonTransparent;
   const avgColorVariance = colorVariance / nonTransparent;
   const edgeRatio = highContrastEdges / nonTransparent;
 
-  if (grayscaleRatio > 0.85 && edgeRatio > 0.15) return 'sketch';
-  if (width <= 128 && height <= 128) return 'icon';
-  if (avgColorVariance < 40 && edgeRatio > 0.08) return 'logo';
-  if (avgColorVariance > 75 && edgeRatio < 0.12) return 'photo';
+  if (grayscaleRatio > 0.85 && edgeRatio > 0.15) return "sketch";
+  if (width <= 128 && height <= 128) return "icon";
+  if (avgColorVariance < 40 && edgeRatio > 0.08) return "logo";
+  if (avgColorVariance > 75 && edgeRatio < 0.12) return "photo";
 
-  return 'illustration';
+  return "illustration";
 }
 
 // Parse SVG paths from raw SVG string preserving exact painter sequence
-function parsePathsFromSvg(rawSvg: string): { d: string; fill: string; fillRule?: string }[] {
+function parsePathsFromSvg(rawSvg: string): {
+  d: string;
+  fill: string;
+  fillRule?: string;
+  opacity?: number;
+  sourceSpace?: boolean;
+  stroke?: string;
+  strokeWidth?: number;
+}[] {
   const pathRegex = /<path([^>]+)\/?>/g;
-  const paths: { d: string; fill: string; fillRule?: string }[] = [];
+  const paths: {
+    d: string;
+    fill: string;
+    fillRule?: string;
+    opacity?: number;
+    sourceSpace?: boolean;
+    stroke?: string;
+    strokeWidth?: number;
+  }[] = [];
   let match;
 
   while ((match = pathRegex.exec(rawSvg)) !== null) {
     const attrs = match[1];
-    const dMatch = attrs.match(/d="([^"]+)"/);
+    const dMatch = attrs.match(/\bd="([^"]+)"/);
     const fillMatch = attrs.match(/fill="([^"]+)"/);
+    const strokeMatch = attrs.match(/\bstroke="([^"]+)"/);
+    const strokeWidthMatch = attrs.match(/stroke-width="([^"]+)"/);
+    const opacityMatch = attrs.match(/fill-opacity="([^"]+)"/);
     const ruleMatch = attrs.match(/fill-rule="([^"]+)"/);
 
     if (dMatch) {
       paths.push({
         d: dMatch[1],
-        fill: fillMatch ? fillMatch[1] : '#000000',
+        fill: fillMatch ? fillMatch[1] : "#000000",
         fillRule: ruleMatch ? ruleMatch[1] : undefined,
+        opacity: opacityMatch ? Number(opacityMatch[1]) : undefined,
+        stroke: strokeMatch?.[1],
+        strokeWidth: strokeWidthMatch ? Number(strokeWidthMatch[1]) : undefined,
       });
     }
   }
@@ -165,73 +188,106 @@ function parsePathsFromSvg(rawSvg: string): { d: string; fill: string; fillRule?
 }
 
 /**
- * 110% Accuracy Master Vectorization Pipeline:
- * 1. Pre-upscales low-res/noisy pixel buffers with edge-preserving super-resolution
- * 2. Traces with sub-pixel curve fitting and strict painter's stacking order preservation
- * 3. NEVER covers or drops white/black paths
- * 4. Yields production-grade Adobe Illustrator-level SVGs
+ * Prepare a bounded high-resolution working image for flat artwork, then fit
+ * curves on a finer grid and cover opaque interiors to prevent seams. Preserve
+ * source dimensions, holes and genuine transparency in the exported SVG.
  */
 export async function vectorizeImage(
   pixelData: Uint8ClampedArray,
   width: number,
   height: number,
-  params: VectorParameters
+  params: VectorParameters,
+  onProgress?: (stage: string) => void,
 ): Promise<VectorResult> {
   const startTime = performance.now();
 
-  const imageType = params.imageType || classifyImageHeuristic(pixelData, width, height);
+  const imageType =
+    params.imageType || classifyImageHeuristic(pixelData, width, height);
 
-  // 1. High-Definition Pre-Upscaler: enhances micro-pixel edges (e.g. portraits, mountain ridges)
-  const upscaled = enhanceAndUpscaleImage(pixelData, width, height, 800);
-  const workWidth = upscaled.width;
-  const workHeight = upscaled.height;
-  const workData = upscaled.data;
-
-  // Map parameters to high-precision tracing options
-  const targetColors = params.colorCount > 0
-    ? params.colorCount
-    : (imageType === 'logo' || imageType === 'icon' ? 16 : 36);
-
-  // Sub-pixel curve parameters
-  const tolerance = Math.max(0.12, 0.18 + (1 - params.detail) * 1.8);
-  const fitError = Math.max(0.2, 0.25 + params.smoothness * 2.2);
-  const cornerAngle = Math.round(40 + params.cornerSharpness * 45);
-  // Keep minArea 0 so micro-pixel details (stars, teeth, hair, highlights) are NEVER lost
-  const minArea = Math.max(0, params.noiseRemoval * 2);
-
-  const imgSource = {
-    width: workWidth,
-    height: workHeight,
-    data: workData,
-  };
-
-  // Always trace with full background so all white & black regions are faithfully vectorized
-  const traceOptions = {
+  const source = { data: pixelData, width, height };
+  upscaleForTracing(source, 1); // Validate before any analysis or allocation.
+  onProgress?.("Analysing artwork and transparency…");
+  const analysis = analyseArtwork(source);
+  const structured = !!analysis.palette;
+  const preserveSampling = analysis.translucent || analysis.preserveFineMarks;
+  onProgress?.("Preparing high-resolution image…");
+  // Broad partial-alpha regions and continuous-tone images retain their native
+  // sampling: interpolation creates extra alpha/colour bands, not real detail.
+  const prepared = upscaleForTracing(
+    source,
+    structured && !preserveSampling ? undefined : 1,
+  );
+  const workWidth = prepared.width;
+  const workHeight = prepared.height;
+  const finerGrid = prepared.scaleX > 1 || prepared.scaleY > 1;
+  const targetColors = params.colorCount > 0 ? params.colorCount : 64;
+  const traceOptions: TraceOptions = {
     colors: targetColors,
-    tolerance,
-    fitError,
-    cornerAngle,
-    minArea,
+    fixedPalette: preserveSampling ? undefined : analysis.palette,
+    alphaLevels: 32,
+    tolerance: finerGrid
+      ? params.preset === "sharp"
+        ? 0.25
+        : 0.6
+      : params.preset === "sharp"
+        ? 0.12
+        : 0.25,
+    fitError: finerGrid
+      ? params.preset === "sharp"
+        ? 0.35
+        : 0.65
+      : params.preset === "sharp"
+        ? 0.18
+        : 0.35,
+    cornerAngle: 65,
+    minArea: 0,
     subpixel: true,
+    underpaint: false,
+    // A very narrow, same-colour overlap repairs quantized mosaic seams on
+    // opaque continuous-tone inputs. Never use this on transparent silhouettes.
+    strokeWidth: analysis.opaque && !structured ? 0.25 : 0,
     optimize: true,
-    background: true,
-    primitives: params.preset === 'sharp' || imageType === 'icon',
-    refineIterations: 2, // High speed + ultra-sharp corners
+    optimizeError: finerGrid && params.preset !== "sharp" ? 0.3 : 0.18,
+    precision: 3,
+    background: false,
+    primitives: false,
+    refineIterations: 3,
   };
-
-  const traceResult = trace(imgSource as any, traceOptions as any);
-  let rawSvg = traceResult.svg || '';
+  onProgress?.("Tracing connected shapes and smooth curves…");
+  const traceResult = trace(prepared, traceOptions);
+  const rawSvg = traceResult.svg || "";
 
   // Extract paths in exact painter's document order (z-index)
   const rawPaths = parsePathsFromSvg(rawSvg);
+  const base = analysis.palette?.[0];
+  const baseHex = base
+    ? `#${[base.r, base.g, base.b].map((v) => v.toString(16).padStart(2, "0")).join("")}`
+    : `#${[pixelData[0], pixelData[1], pixelData[2]].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+  // Keep opaque input fully covered. For transparent art, coverage is limited
+  // to an eroded, fully opaque interior; the genuine silhouette is untouched.
+  const coverage = analysis.opaque
+    ? `M0 0h${width}v${height}H0z`
+    : structured && analysis.palette!.length > 1
+      ? opaqueInteriorPath(prepared)
+      : undefined;
+  if (coverage && !params.removeBackground)
+    rawPaths.unshift({
+      d: coverage,
+      fill: baseHex,
+      fillRule: "evenodd",
+      sourceSpace: analysis.opaque,
+    });
+  onProgress?.("Building editable colour layers…");
 
   const paletteMap = new Map<string, { count: number; hex: string }>();
   let totalNodes = 0;
   let totalPaths = 0;
 
   // Check if first path is a full canvas rectangle (only removed if explicitly requested)
-  const hasFullBackdrop = rawPaths.length > 0 &&
-    (rawPaths[0].d.startsWith('M0 0h') || rawPaths[0].d.includes(`h${workWidth}v${workHeight}`));
+  const hasFullBackdrop =
+    rawPaths.length > 0 &&
+    (rawPaths[0].d.startsWith("M0 0h") ||
+      rawPaths[0].d.includes(`h${workWidth}v${workHeight}`));
 
   const validPaths: VectorPath[] = [];
 
@@ -246,41 +302,28 @@ export async function vectorizeImage(
     totalPaths++;
 
     const colorHex = rp.fill.toLowerCase();
-    const rgb = hexToRgb(colorHex);
-    const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
-    const maxC = Math.max(rgb.r, rgb.g, rgb.b);
-    const minC = Math.min(rgb.r, rgb.g, rgb.b);
-    const saturation = maxC === 0 ? 0 : (maxC - minC) / maxC;
-
     // Track palette swatches
     const existing = paletteMap.get(colorHex) || { count: 0, hex: colorHex };
     existing.count += nodeCount;
     paletteMap.set(colorHex, existing);
 
-    // Assign semantic role for inspectability (without breaking z-index)
-    let role: SemanticRole = 'main-shape';
-    if (idx === 0 && hasFullBackdrop) {
-      role = 'background';
-    } else if (luminance < 0.15) {
-      role = 'outline';
-    } else if (luminance > 0.85) {
-      role = 'accent';
-    } else if (luminance < 0.45 && saturation < 0.4) {
-      role = 'shadow';
-    } else if (nodeCount < 10) {
-      role = 'detail';
-    } else {
-      role = 'main-shape';
-    }
-
+    const transform = rp.sourceSpace
+      ? undefined
+      : prepared.scaleX !== 1 || prepared.scaleY !== 1
+        ? `scale(${1 / prepared.scaleX} ${1 / prepared.scaleY})`
+        : undefined;
     const pathName = `Vector ${idx + 1} (${colorHex.toUpperCase()})`;
 
     validPaths.push({
       id: `path_${idx}`,
       name: pathName,
+      transform,
       d: rp.d,
       fill: rp.fill,
       fillRule: rp.fillRule,
+      opacity: rp.opacity,
+      stroke: rp.stroke,
+      strokeWidth: rp.strokeWidth,
       nodeCount,
       area: nodeCount * 10,
       points: extractApproxPoints(rp.d),
@@ -290,44 +333,35 @@ export async function vectorizeImage(
     });
   });
 
-  // Group paths into structured layers while STRICTLY PRESERVING paint order
-  // Instead of reordering paths across z-index, we partition the natural sequence
-  // into logical depth layers (Background, Base Shapes, Details & Accents)
+  // Adjacent paths of the same colour share a named layer. Never regroup
+  // non-adjacent colours: doing so can change overlap and hole rendering.
   const layers: VectorLayer[] = [];
-
-  if (validPaths.length > 0) {
-    // Determine natural layer chunks
-    const chunkSize = Math.max(1, Math.ceil(validPaths.length / 4));
-    const layerTitles = [
-      'Layer 1: Canvas Base & Contours',
-      'Layer 2: Base Geometry & Midtones',
-      'Layer 3: Shading & Overlays',
-      'Layer 4: High-Detail Accents & Highlights',
-    ];
-
-    for (let c = 0; c < 4; c++) {
-      const start = c * chunkSize;
-      const end = Math.min(validPaths.length, (c + 1) * chunkSize);
-      const chunkPaths = validPaths.slice(start, end);
-      if (chunkPaths.length === 0) continue;
-
-      const layerColors = Array.from(new Set(chunkPaths.map(p => p.fill.toLowerCase())));
-      const layerNodeCount = chunkPaths.reduce((sum, p) => sum + p.nodeCount, 0);
-
-      layers.push({
-        id: `layer_${c + 1}`,
-        name: `${layerTitles[c] || `Layer ${c + 1}`} (${chunkPaths.length} paths)`,
-        semanticRole: c === 0 ? 'background' : c === 3 ? 'accent' : 'main-shape',
-        color: layerColors[0] || '#6366f1',
-        colors: layerColors,
+  for (const path of validPaths) {
+    let layer = layers[layers.length - 1];
+    if (
+      !layer ||
+      layer.color !== path.fill ||
+      layer.transform !== path.transform
+    ) {
+      layer = {
+        id: `layer_${layers.length + 1}`,
+        name: `Colour ${layers.length + 1} · ${path.fill.toUpperCase()}`,
+        semanticRole: "main-shape",
+        color: path.fill,
+        colors: [path.fill],
         visible: true,
         locked: false,
         expanded: true,
-        paths: chunkPaths,
-        depthRank: c,
-        nodeCount: layerNodeCount,
-      });
+        paths: [],
+        transform: path.transform,
+        depthRank: layers.length,
+        nodeCount: 0,
+      };
+      layers.push(layer);
     }
+    path.layerId = layer.id;
+    layer.paths.push(path);
+    layer.nodeCount += path.nodeCount;
   }
 
   // Build clean Color Palette items
@@ -347,8 +381,13 @@ export async function vectorizeImage(
   // Compose final clean SVG that preserves 100% true painter's stacking order
   const finalSvg = composeSvg(
     layers,
-    { width: workWidth, height: workHeight, includeMetadata: true, figmaCompatible: true },
-    { imageType, nodeCount: totalNodes, pathCount: totalPaths }
+    {
+      width,
+      height,
+      includeMetadata: true,
+      figmaCompatible: true,
+    },
+    { imageType, nodeCount: totalNodes, pathCount: totalPaths },
   );
 
   const minifiedSvg = minifySvgString(finalSvg);
@@ -362,8 +401,12 @@ export async function vectorizeImage(
     palette,
     meta: {
       imageType,
-      width: workWidth,
-      height: workHeight,
+      width,
+      height,
+      workingWidth: workWidth,
+      workingHeight: workHeight,
+      upscaleFactor: Math.min(prepared.scaleX, prepared.scaleY),
+      coherentColours: structured,
       layersCount: layers.length,
       pathsCount: totalPaths,
       nodesCount: totalNodes,

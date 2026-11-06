@@ -1,515 +1,627 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
-  Upload,
-  Sparkles,
-  Download,
-  Copy,
-  Check,
+  ArrowDown,
   ArrowLeft,
+  ArrowRight,
+  Check,
+  Copy,
+  Download,
+  Layers,
+  LockKeyhole,
+  Minus,
+  Plus,
+  Upload,
+  X,
   AlertCircle,
-  FileCode,
-} from 'lucide-react';
-import { useWorkbenchStore, formatFileSize } from '../../stores/workbench-store';
+} from "lucide-react";
+import {
+  useWorkbenchStore,
+  formatFileSize,
+} from "../../stores/workbench-store";
 
-const ROTATING_MESSAGES = [
-  'Reading your image…',
-  'Finding edges…',
-  'Tracing shapes…',
-  'Building your SVG…',
-  'Almost there…',
-];
-
-export function SvgConverterApp() {
-  const {
-    appState,
-    errorMessage,
-    fileName,
-    imageDataUrl,
-    imageWidth,
-    imageHeight,
-    outputSvg,
-    svgBlobUrl,
-    svgSizeBytes,
-    splitPosition,
-    copiedToast,
-    convertFile,
-    reset,
-    setSplitPosition,
-    copySvg,
-    downloadSvg,
-  } = useWorkbenchStore();
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const sliderFrameRef = useRef<HTMLDivElement>(null);
-  const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [isDraggingSlider, setIsDraggingSlider] = useState(false);
-  const [statusMessageIndex, setStatusMessageIndex] = useState(0);
-
-  // Rotating status message during conversion
-  useEffect(() => {
-    if (appState !== 'converting') return;
-    setStatusMessageIndex(0);
-    const interval = setInterval(() => {
-      setStatusMessageIndex((prev) => (prev + 1) % ROTATING_MESSAGES.length);
-    }, 2400);
-    return () => clearInterval(interval);
-  }, [appState]);
-
-  // Global Clipboard Paste Support (Cmd+V / Ctrl+V)
-  useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      if (appState === 'converting') return;
-      if (e.clipboardData?.items) {
-        for (let i = 0; i < e.clipboardData.items.length; i++) {
-          const item = e.clipboardData.items[i];
-          if (item.type.indexOf('image') !== -1) {
-            const file = item.getAsFile();
-            if (file) {
-              convertFile(file);
-              break;
-            }
-          }
-        }
-      }
-    };
-
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-  }, [appState, convertFile]);
-
-  // Handle Drag-and-Drop for File Upload
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (appState === 'idle') {
-      setIsDraggingFile(true);
-    }
-  };
-
-  const handleDragLeave = () => {
-    setIsDraggingFile(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingFile(false);
-    if (appState === 'converting') return;
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      convertFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  // Compare Slider Drag Handling (Mouse & Touch)
-  const updateSplitFromClientX = useCallback(
-    (clientX: number) => {
-      if (!sliderFrameRef.current) return;
-      const rect = sliderFrameRef.current.getBoundingClientRect();
-      const offsetX = clientX - rect.left;
-      const pct = (offsetX / rect.width) * 100;
-      setSplitPosition(pct);
-    },
-    [setSplitPosition]
-  );
-
-  const handleSliderMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingSlider(true);
-  };
-
-  const handleSliderTouchStart = (e: React.TouchEvent) => {
-    e.stopPropagation();
-    setIsDraggingSlider(true);
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDraggingSlider) {
-        updateSplitFromClientX(e.clientX);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsDraggingSlider(false);
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (isDraggingSlider && e.touches[0]) {
-        updateSplitFromClientX(e.touches[0].clientX);
-      }
-    };
-
-    const handleTouchEnd = () => {
-      setIsDraggingSlider(false);
-    };
-
-    if (isDraggingSlider) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      window.addEventListener('touchmove', handleTouchMove);
-      window.addEventListener('touchend', handleTouchEnd);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [isDraggingSlider, updateSplitFromClientX]);
-
-  // Keyboard accessibility for compare slider
-  const handleSliderKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      setSplitPosition(Math.max(0, splitPosition - 5));
-    } else if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      setSplitPosition(Math.min(100, splitPosition + 5));
-    }
-  };
-
-  // Safe SVG filename format
-  const cleanSvgName = fileName ? fileName.replace(/\.[^/.]+$/, '') + '.svg' : 'vector.svg';
-  const aspectRatio = imageWidth && imageHeight ? imageWidth / imageHeight : 1;
-
+type View = "compare" | "vector" | "original";
+function Mark() {
   return (
-    <main className="min-h-screen w-full bg-[#0a0a0c] text-white flex flex-col justify-between selection:bg-indigo-600 selection:text-white relative overflow-hidden">
-      {/* Soft ambient background radial glow (No heavy grid canvas) */}
-      <div
-        className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-indigo-600/10 blur-[130px] rounded-full pointer-events-none"
-        aria-hidden="true"
+    <svg
+      className="brand-mark"
+      viewBox="0 0 32 32"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path d="M5 25C5 7 27 25 27 7" stroke="currentColor" strokeWidth="2.5" />
+      <path
+        d="M5 25V7h22"
+        stroke="currentColor"
+        strokeWidth="1"
+        opacity=".45"
       />
-
-      {/* ── TOP HEADER ── */}
-      <header className="h-16 px-6 sm:px-8 border-b border-white/[0.06] flex items-center justify-between z-20">
-        {/* Top-left: Minimal Brand */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-950/40">
-            <Sparkles className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-semibold text-sm tracking-tight text-white">
-            VectorForge
+      <path d="M2 22h6v6H2zM24 4h6v6h-6z" fill="currentColor" />
+      <circle cx="5" cy="7" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+function SampleArt({ nodes = false }: { nodes?: boolean }) {
+  return (
+    <svg viewBox="0 0 300 260" fill="none" aria-hidden="true">
+      <g fill="#e64b35">
+        <path d="M150 38C185 38 194 82 177 103C206 84 242 109 237 140C233 170 203 182 177 169C194 197 176 231 146 230C113 230 100 199 114 174C83 188 54 169 56 139C57 108 90 94 115 108C96 80 115 38 150 38Z" />
+        <circle cx="147" cy="138" r="31" fill="#fff" />
+      </g>
+      {nodes && (
+        <g stroke="#303c36" strokeWidth="1">
+          <path d="M150 38C185 38 194 82 177 103C206 84 242 109 237 140C233 170 203 182 177 169C194 197 176 231 146 230C113 230 100 199 114 174C83 188 54 169 56 139C57 108 90 94 115 108C96 80 115 38 150 38Z" />
+          <path d="M150 14v48M126 38h48M213 140h48M237 116v48" opacity=".5" />
+          {[
+            [150, 38],
+            [177, 103],
+            [237, 140],
+            [177, 169],
+            [146, 230],
+            [114, 174],
+            [56, 139],
+            [115, 108],
+          ].map(([x, y], i) => (
+            <rect
+              key={i}
+              x={x - 3}
+              y={y - 3}
+              width="6"
+              height="6"
+              fill="white"
+            />
+          ))}
+          <circle cx="150" cy="14" r="2.5" fill="white" />
+          <circle cx="261" cy="140" r="2.5" fill="white" />
+        </g>
+      )}
+    </svg>
+  );
+}
+function createSample(kind: "mark" | "line") {
+  const canvas = document.createElement("canvas");
+  canvas.width = 480;
+  canvas.height = 400;
+  const ctx = canvas.getContext("2d")!;
+  ctx.scale(1.5, 1.5);
+  if (kind === "mark") {
+    ctx.translate(10, 0);
+    ctx.fillStyle = "#e64b35";
+    ctx.fill(
+      new Path2D(
+        "M150 38C185 38 194 82 177 103C206 84 242 109 237 140C233 170 203 182 177 169C194 197 176 231 146 230C113 230 100 199 114 174C83 188 54 169 56 139C57 108 90 94 115 108C96 80 115 38 150 38Z",
+      ),
+    );
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.arc(147, 138, 31, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.strokeStyle = "#253c34";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(160, 225);
+    ctx.bezierCurveTo(125, 165, 190, 110, 155, 45);
+    ctx.stroke();
+    for (let i = 0; i < 4; i++) {
+      const y = 85 + i * 32;
+      ctx.beginPath();
+      ctx.moveTo(156, y + 20);
+      ctx.bezierCurveTo(100, y + 25, 95, y - 20, 96, y - 20);
+      ctx.bezierCurveTo(140, y - 22, 158, y + 3, 156, y + 20);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(157, y + 30);
+      ctx.bezierCurveTo(205, y + 33, 220, y - 10, 220, y - 10);
+      ctx.bezierCurveTo(173, y - 10, 158, y + 8, 157, y + 30);
+      ctx.stroke();
+    }
+  }
+  return canvas.toDataURL("image/png");
+}
+export function SvgConverterApp() {
+  const store = useWorkbenchStore();
+  const { appState, imageDataUrl, svgBlobUrl, result, splitPosition } = store;
+  const input = useRef<HTMLInputElement>(null);
+  const frame = useRef<HTMLDivElement>(null);
+  const resultHeading = useRef<HTMLHeadingElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [view, setView] = useState<View>("compare");
+  const [zoom, setZoom] = useState(1);
+  const [showLayers, setShowLayers] = useState(false);
+  const [help, setHelp] = useState(false);
+  const busy = appState === "converting";
+  useEffect(() => {
+    const paste = (event: ClipboardEvent) => {
+      if (useWorkbenchStore.getState().appState === "converting") return;
+      const file = Array.from(event.clipboardData?.items || [])
+        .find((item) => item.type.startsWith("image/"))
+        ?.getAsFile();
+      if (file) {
+        event.preventDefault();
+        void store.convertFile(file);
+      }
+    };
+    window.addEventListener("paste", paste);
+    return () => window.removeEventListener("paste", paste);
+  }, [store.convertFile]);
+  useEffect(() => {
+    if (appState === "done") {
+      setView("compare");
+      setZoom(1);
+      setShowLayers(false);
+      resultHeading.current?.focus({ preventScroll: true });
+    }
+  }, [appState]);
+  const choose = () => input.current?.click();
+  const sample = (kind: "mark" | "line") =>
+    void store.convertDataUrl(
+      createSample(kind),
+      kind === "mark" ? "flower-mark.png" : "botanical-line.png",
+    );
+  const splitAt = (x: number) => {
+    const rect = frame.current?.getBoundingClientRect();
+    if (rect) store.setSplitPosition(((x - rect.left) / rect.width) * 100);
+  };
+  const cleanName = store.fileName.replace(/\.[^/.]+$/, "") + ".svg";
+  return (
+    <div className="app-shell">
+      <a href="#workspace" className="skip-link">
+        Skip to converter
+      </a>
+      <header className="app-header">
+        <a className="brand" href="/" aria-label="VectorForge home">
+          <Mark />
+          <span>
+            VectorForge<span className="brand-period">.</span>
           </span>
-        </div>
-
-        {/* When Done: Filename & File Size pill */}
-        {appState === 'done' && (
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-xs text-neutral-400">
-              <span className="font-medium text-neutral-200 truncate max-w-[200px]">
-                {cleanSvgName}
-              </span>
-              <span className="w-1 h-1 rounded-full bg-neutral-600" />
-              <span className="font-mono text-neutral-400">
-                {formatFileSize(svgSizeBytes)}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={copySvg}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-neutral-300 hover:text-white hover:bg-white/[0.08] transition-colors flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                aria-label="Copy SVG code"
-              >
-                {copiedToast ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-emerald-300 font-semibold">Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5 text-neutral-400" />
-                    <span>Copy SVG</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={downloadSvg}
-                className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-white text-black hover:bg-neutral-200 transition-all shadow-md active:scale-95 flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download SVG</span>
-              </button>
-            </div>
-          </div>
-        )}
+        </a>
+        <div className="header-context">Image to SVG</div>
+        <button
+          className="text-button help-button"
+          onClick={() => setHelp(!help)}
+          aria-expanded={help}
+        >
+          How it works {help ? <X size={15} /> : <ArrowDown size={15} />}
+        </button>
       </header>
-
-      {/* ── HIDDEN FILE INPUT ── */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/bmp"
-        className="hidden"
-        onChange={(e) => {
-          if (e.target.files?.[0]) {
-            convertFile(e.target.files[0]);
-          }
-        }}
-      />
-
-      {/* ── SCREEN 1: UPLOAD (EMPTY STATE) ── */}
-      {appState === 'idle' && (
-        <section className="flex-1 flex flex-col items-center justify-center px-6 py-12 z-10 animate-in fade-in duration-200">
-          <div className="w-full max-w-xl mx-auto flex flex-col items-center text-center">
-            {/* Headline & Subtext */}
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-3">
-              Turn any image into a clean SVG
-            </h1>
-            <p className="text-neutral-400 text-sm sm:text-base font-normal mb-8 max-w-md">
-              Drop a PNG or JPG here, or click to browse
-            </p>
-
-            {/* Centered Drop Zone */}
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`w-full p-10 sm:p-14 rounded-3xl border-2 border-dashed cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-5 text-center ${
-                isDraggingFile
-                  ? 'border-indigo-400 bg-indigo-950/20 scale-[1.01]'
-                  : 'border-white/[0.12] bg-[#0e0e13]/70 hover:bg-[#13131a] hover:border-white/25 shadow-2xl'
-              }`}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  fileInputRef.current?.click();
-                }
-              }}
-              aria-label="Drop zone for image files"
-            >
-              <div className="w-14 h-14 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center text-neutral-300 shadow-inner">
-                <Upload className="w-6 h-6 text-indigo-400" />
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-white">
-                  {isDraggingFile ? 'Drop to convert' : 'Drop your file here'}
-                </p>
-                <p className="text-xs text-neutral-400">
-                  Supports PNG, JPG, WebP · Up to 25 MB
-                </p>
-              </div>
-
-              {/* Single Primary Action Button */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  fileInputRef.current?.click();
-                }}
-                className="mt-2 px-6 py-2.5 rounded-xl bg-white text-black font-semibold text-xs sm:text-sm hover:bg-neutral-200 transition-all shadow-md active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                Choose image
-              </button>
-            </div>
-          </div>
-        </section>
+      {help && (
+        <aside className="help-panel">
+          <strong>From pixels to paths.</strong>
+          <p>
+            Choose an image or paste one from your clipboard. We trace it on
+            your device. Compare the result, zoom in to check the edges, then
+            save your SVG. Logos and flat artwork work best; photos become
+            simplified illustrations.
+          </p>
+          <p>
+            SVG colour layers contain editable paths. Lettering is traced as
+            shapes, rather than editable text.
+          </p>
+        </aside>
       )}
-
-      {/* ── SCREEN 2: CONVERTING (THE MAGIC MOMENT) ── */}
-      {appState === 'converting' && (
-        <section className="flex-1 flex flex-col items-center justify-center px-6 py-8 z-10 animate-in fade-in duration-200">
-          <div className="flex flex-col items-center text-center max-w-2xl w-full">
-            {/* Centered Preview with GPU-Composited Scanning Line */}
-            <div
-              className="relative max-h-[55vh] max-w-[85vw] rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-[#0e0e14] flex items-center justify-center"
-              style={{
-                aspectRatio: aspectRatio,
-                width: imageWidth && imageHeight ? `${Math.min(imageWidth, 540)}px` : '420px',
-                height: 'auto',
-              }}
-            >
-              {imageDataUrl && (
-                <img
-                  src={imageDataUrl}
-                  alt="Processing image"
-                  className="w-full h-full object-contain pointer-events-none opacity-90 transition-opacity"
-                />
-              )}
-
-              {/* GPU-Composited Scanning Line Overlay */}
-              <div
-                className="absolute inset-0 pointer-events-none overflow-hidden"
-                aria-hidden="true"
-              >
-                <div className="absolute left-0 right-0 h-24 bg-gradient-to-b from-transparent via-indigo-500/20 to-transparent -translate-y-full animate-scan-line">
-                  <div className="absolute bottom-1/2 left-0 right-0 h-[2px] bg-indigo-400 shadow-[0_0_16px_rgba(99,102,241,0.9)]" />
-                </div>
-              </div>
-            </div>
-
-            {/* Rotating Status Text */}
-            <div className="mt-8 space-y-3 flex flex-col items-center">
-              <p
-                className="text-sm font-medium text-neutral-200 tracking-wide transition-all duration-300"
-                aria-live="polite"
-              >
-                {ROTATING_MESSAGES[statusMessageIndex]}
+      <main
+        id="workspace"
+        className={`workspace ${appState === "done" ? "workspace-result" : ""}`}
+      >
+        <input
+          ref={input}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/bmp"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void store.convertFile(file);
+          }}
+        />
+        {appState === "idle" && (
+          <>
+            <div className="intro">
+              <h1>Image to SVG</h1>
+              <p>
+                Your artwork, ready for its next size.
+                <br className="mobile-break" /> Convert an image into editable
+                vector paths.
               </p>
-
-              {/* Indeterminate Shimmer Progress Bar */}
-              <div className="w-56 h-1 rounded-full bg-white/[0.08] overflow-hidden relative">
-                <div className="absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-indigo-500 to-transparent animate-shimmer" />
-              </div>
             </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── SCREEN 3: DONE (RESULT) ── */}
-      {appState === 'done' && (
-        <section className="flex-1 flex flex-col items-center justify-between px-6 py-6 z-10 animate-in fade-in duration-300">
-          <div className="flex-1 w-full flex items-center justify-center my-auto">
-            {/* Interactive Before/After Compare Viewport */}
             <div
-              ref={sliderFrameRef}
-              onClick={(e) => updateSplitFromClientX(e.clientX)}
-              className="relative max-h-[66vh] max-w-[90vw] rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)] border border-white/10 bg-checkerboard flex items-center justify-center cursor-ew-resize select-none"
-              style={{
-                aspectRatio: aspectRatio,
-                width: imageWidth && imageHeight ? `${Math.min(imageWidth, 800)}px` : '600px',
-                height: 'auto',
+              className={`upload-workspace ${dragging ? "is-dragging" : ""}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
               }}
-              role="slider"
-              tabIndex={0}
-              aria-label="Before and after comparison slider"
-              aria-valuenow={Math.round(splitPosition)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              onKeyDown={handleSliderKeyDown}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node))
+                  setDragging(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                const file = e.dataTransfer.files[0];
+                if (file) void store.convertFile(file);
+              }}
             >
-              {/* Left Side: Original Image (Before) */}
-              {imageDataUrl && (
-                <img
-                  src={imageDataUrl}
-                  alt="Original image preview"
-                  className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                  style={{
-                    clipPath: `polygon(0% 0%, ${splitPosition}% 0%, ${splitPosition}% 100%, 0% 100%)`,
-                  }}
-                />
-              )}
-
-              {/* Right Side: Clean Vector SVG (After) via Blob URL (Never freezes DOM) */}
-              {svgBlobUrl && (
-                <img
-                  src={svgBlobUrl}
-                  alt="Vectorized SVG preview"
-                  className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                  style={{
-                    clipPath: `polygon(${splitPosition}% 0%, 100% 0%, 100% 100%, ${splitPosition}% 100%)`,
-                  }}
-                />
-              )}
-
-              {/* Draggable Vertical Handle */}
-              <div
-                className="absolute top-0 bottom-0 z-20 pointer-events-auto"
-                style={{ left: `${splitPosition}%` }}
-              >
-                {/* Thin divider line */}
-                <div className="absolute top-0 bottom-0 -left-px w-[2px] bg-white shadow-[0_0_10px_rgba(255,255,255,0.7)]" />
-
-                {/* Touch/Mouse Handle Thumb */}
-                <div
-                  onMouseDown={handleSliderMouseDown}
-                  onTouchStart={handleSliderTouchStart}
-                  className="absolute top-1/2 -left-4 -translate-y-1/2 w-8 h-8 rounded-full bg-white text-black shadow-xl flex items-center justify-center cursor-ew-resize hover:scale-105 active:scale-95 transition-transform focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              <section className="upload-panel" aria-label="Upload an image">
+                <Upload size={30} strokeWidth={1.4} />
+                <h2>
+                  {dragging
+                    ? "Drop it. We’ll take it from here."
+                    : "Start with your image"}
+                </h2>
+                <p>Drag it here, or choose a file.</p>
+                <button
+                  className="button button-primary upload-button"
+                  onClick={choose}
                 >
-                  <div className="flex gap-0.5 items-center">
-                    <div className="w-[1.5px] h-3 bg-neutral-600 rounded-full" />
-                    <div className="w-[1.5px] h-3 bg-neutral-600 rounded-full" />
+                  Choose image <ArrowRight size={18} />
+                </button>
+                <span className="file-support">
+                  PNG, JPG, WebP, BMP · Up to 25 MB
+                </span>
+                <span className="paste-hint">
+                  You can also paste an image with <kbd>⌘ / Ctrl V</kbd>
+                </span>
+              </section>
+              <section
+                className="specimen"
+                aria-label="Example of raster artwork becoming vector paths"
+              >
+                <div className="specimen-top">
+                  <span>A little less pixel. A lot more possibility.</span>
+                  <span className="specimen-dot" />
+                </div>
+                <div className="specimen-art">
+                  <div className="raster-specimen">
+                    <SampleArt />
+                  </div>
+                  <div className="vector-specimen">
+                    <SampleArt nodes />
+                  </div>
+                  <div className="specimen-divider">
+                    <span>
+                      <ArrowLeft size={12} />
+                      <ArrowRight size={12} />
+                    </span>
                   </div>
                 </div>
-              </div>
-
-              {/* Floating Comparison Badges */}
-              <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-medium text-neutral-300 pointer-events-none border border-white/10">
-                Before (PNG)
-              </div>
-              <div className="absolute top-3 right-3 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-medium text-neutral-300 pointer-events-none border border-white/10">
-                After (SVG)
-              </div>
+                <div className="specimen-bottom">
+                  <span>Raster image</span>
+                  <span>Editable paths</span>
+                </div>
+                <p className="specimen-caption">
+                  A sample mark, shown as pixels and vector curves.
+                </p>
+              </section>
             </div>
-          </div>
-
-          {/* Action Row & Return Link (At most 3 actions) */}
-          <div className="w-full max-w-md mx-auto flex flex-col items-center gap-3 pt-4">
-            <div className="w-full flex items-center justify-center gap-3">
-              <button
-                onClick={copySvg}
-                className="flex-1 py-2.5 px-4 rounded-xl border border-white/15 bg-white/[0.04] hover:bg-white/[0.08] text-white text-xs sm:text-sm font-medium transition-colors flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                {copiedToast ? (
-                  <>
-                    <Check className="w-4 h-4 text-emerald-400" />
-                    <span className="text-emerald-300 font-semibold">Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4 text-neutral-400" />
-                    <span>Copy SVG</span>
-                  </>
-                )}
+            <div className="sample-row">
+              <span>No image handy? Try one:</span>
+              <button onClick={() => sample("mark")}>
+                <span className="sample-flower" />
+                Flower mark <ArrowRight size={14} />
               </button>
-
-              <button
-                onClick={downloadSvg}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-white text-black hover:bg-neutral-200 text-xs sm:text-sm font-semibold transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download SVG</span>
+              <button onClick={() => sample("line")}>
+                <span className="sample-line" />
+                Line drawing <ArrowRight size={14} />
               </button>
             </div>
-
-            <button
-              onClick={reset}
-              className="text-xs text-neutral-400 hover:text-white transition-colors underline-offset-4 hover:underline py-1"
-            >
-              Convert another image
-            </button>
-          </div>
-        </section>
-      )}
-
-      {/* ── ERROR STATE ── */}
-      {appState === 'error' && (
-        <section className="flex-1 flex flex-col items-center justify-center px-6 py-12 z-10 animate-in fade-in duration-200">
-          <div className="w-full max-w-md mx-auto flex flex-col items-center text-center p-8 rounded-3xl bg-[#0e0e13] border border-white/10 shadow-2xl">
-            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mb-4">
-              <AlertCircle className="w-6 h-6" />
+            <div className="workflow-note">
+              <span>
+                <LockKeyhole size={15} /> Your files stay on your device.
+              </span>
+              <span>
+                Upload <ArrowRight size={13} /> Compare <ArrowRight size={13} />{" "}
+                Download
+              </span>
             </div>
-
-            <h2 className="text-lg font-bold text-white mb-2">
-              Conversion failed
-            </h2>
-            <p className="text-xs sm:text-sm text-neutral-400 mb-6 leading-relaxed">
-              {errorMessage || "We couldn't convert this image. Please try a PNG or JPG under 25 MB."}
+          </>
+        )}
+        {busy && (
+          <section
+            className="processing-state"
+            aria-labelledby="processing-title"
+          >
+            <div className="processing-art">
+              {imageDataUrl ? (
+                <img src={imageDataUrl} alt="Your image being converted" />
+              ) : (
+                <Upload size={32} />
+              )}
+            </div>
+            <h1 id="processing-title">Making room for every detail.</h1>
+            <p role="status">{store.processingStage}</p>
+            <div className="loading-track" aria-hidden="true">
+              <span />
+            </div>
+            <p className="processing-note">
+              Tracing locally. Detailed images may take a little longer.
             </p>
-
-            <button
-              onClick={reset}
-              className="px-5 py-2.5 rounded-xl bg-white text-black font-semibold text-xs sm:text-sm hover:bg-neutral-200 transition-all shadow-md active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              Try another image
+            <button className="text-button" onClick={store.reset}>
+              Cancel conversion
             </button>
-          </div>
-        </section>
-      )}
-
-      {/* ── FOOTER (Empty & Subtle) ── */}
-      <footer className="h-10 px-6 flex items-center justify-between text-[11px] text-neutral-600 border-t border-white/[0.04]">
+          </section>
+        )}
+        {appState === "done" && result && (
+          <>
+            <div className="result-heading">
+              <div>
+                <div className="ready-label">
+                  <Check size={15} /> Your SVG is ready
+                </div>
+                <h1 ref={resultHeading} tabIndex={-1} title={cleanName}>
+                  {cleanName}
+                </h1>
+                <p>
+                  {store.imageWidth.toLocaleString()} ×{" "}
+                  {store.imageHeight.toLocaleString()} px <span>·</span>{" "}
+                  {formatFileSize(store.svgSizeBytes)} <span>·</span> Editable
+                  vector paths
+                </p>
+              </div>
+              <button
+                className="button button-primary"
+                onClick={store.downloadSvg}
+              >
+                <Download size={17} /> Download SVG
+              </button>
+            </div>
+            <div className="editor">
+              <div className="editor-toolbar">
+                <div
+                  className="view-tabs"
+                  role="group"
+                  aria-label="Preview mode"
+                >
+                  {(["compare", "vector", "original"] as View[]).map((mode) => (
+                    <button
+                      key={mode}
+                      aria-pressed={view === mode}
+                      onClick={() => setView(mode)}
+                    >
+                      {mode === "compare"
+                        ? "Compare"
+                        : mode === "vector"
+                          ? "SVG"
+                          : "Original"}
+                    </button>
+                  ))}
+                </div>
+                <div className="editor-tools">
+                  <button
+                    className="icon-button"
+                    aria-label="Zoom out"
+                    disabled={zoom <= 1}
+                    onClick={() => setZoom((z) => Math.max(1, z - 0.5))}
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <button
+                    className="zoom-value"
+                    onClick={() => setZoom(1)}
+                    aria-label="Fit image to preview"
+                  >
+                    {zoom === 1 ? "Fit" : `${Math.round(zoom * 100)}%`}
+                  </button>
+                  <button
+                    className="icon-button"
+                    aria-label="Zoom in"
+                    disabled={zoom >= 4}
+                    onClick={() => setZoom((z) => Math.min(4, z + 0.5))}
+                  >
+                    <Plus size={16} />
+                  </button>
+                  <span className="tool-divider" />
+                  <button
+                    className={`layers-button ${showLayers ? "selected" : ""}`}
+                    aria-label="Inspect colour layers"
+                    aria-expanded={showLayers}
+                    onClick={() => setShowLayers(!showLayers)}
+                  >
+                    <Layers size={16} />
+                    <span>Layers</span>
+                  </button>
+                </div>
+              </div>
+              <div className="editor-body">
+                <div className={`preview-well ${zoom > 1 ? "is-zoomed" : ""}`}>
+                  <div className="preview-scroll">
+                    <div
+                      className="artboard"
+                      ref={frame}
+                      style={
+                        {
+                          aspectRatio: `${store.imageWidth}/${store.imageHeight}`,
+                          "--art-ratio": store.imageWidth / store.imageHeight,
+                          "--art-zoom": zoom,
+                          maxWidth: zoom === 1 ? "100%" : "none",
+                        } as CSSProperties
+                      }
+                    >
+                      {imageDataUrl && view !== "vector" && (
+                        <img
+                          draggable={false}
+                          src={imageDataUrl}
+                          alt="Original raster image"
+                          style={{
+                            clipPath:
+                              view === "compare"
+                                ? `inset(0 ${100 - splitPosition}% 0 0)`
+                                : undefined,
+                          }}
+                        />
+                      )}
+                      {svgBlobUrl && view !== "original" && (
+                        <img
+                          draggable={false}
+                          src={svgBlobUrl}
+                          alt="Converted SVG with editable vector paths"
+                          style={{
+                            clipPath:
+                              view === "compare"
+                                ? `inset(0 0 0 ${splitPosition}%)`
+                                : undefined,
+                          }}
+                        />
+                      )}
+                      {view === "compare" && (
+                        <>
+                          <div
+                            className="compare-line"
+                            style={{ left: `${splitPosition}%` }}
+                          >
+                            <span>
+                              <ArrowLeft size={13} />
+                              <ArrowRight size={13} />
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            className="compare-input"
+                            min="0"
+                            max="100"
+                            value={splitPosition}
+                            aria-label="Before and after comparison"
+                            aria-valuetext={`${Math.round(splitPosition)} percent original image`}
+                            onChange={(e) =>
+                              store.setSplitPosition(Number(e.target.value))
+                            }
+                            onPointerDown={(e) => {
+                              e.currentTarget.setPointerCapture(e.pointerId);
+                              splitAt(e.clientX);
+                            }}
+                            onPointerMove={(e) => {
+                              if (e.buttons === 1) splitAt(e.clientX);
+                            }}
+                          />
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="canvas-labels">
+                    <span>
+                      {view === "vector" ? "SVG vector" : "Original image"}
+                    </span>
+                    <span>
+                      {view === "compare"
+                        ? "SVG vector"
+                        : zoom > 1
+                          ? "Scroll to inspect the edges"
+                          : "Transparent areas shown as checks"}
+                    </span>
+                  </div>
+                </div>
+                {showLayers && (
+                  <aside className="layers-panel">
+                    <div className="layers-heading">
+                      <h2>Colour layers</h2>
+                      <span>{result.layers.length}</span>
+                    </div>
+                    <p>Paths in their original stacking order.</p>
+                    <ol className="layer-list">
+                      {result.layers.map((layer, i) => (
+                        <li key={layer.id}>
+                          <span
+                            className="layer-swatch"
+                            style={{ backgroundColor: layer.color }}
+                          />
+                          <div>
+                            <strong>Colour {i + 1}</strong>
+                            <span>
+                              {layer.color.toUpperCase()} · {layer.paths.length}{" "}
+                              {layer.paths.length === 1 ? "path" : "paths"}
+                            </span>
+                          </div>
+                          <span className="layer-order">{i + 1}</span>
+                        </li>
+                      ))}
+                    </ol>
+                    <p className="layers-note">
+                      Named groups stay in your SVG for editing in vector
+                      applications.
+                    </p>
+                  </aside>
+                )}
+              </div>
+              <div className="editor-status">
+                <span>
+                  {result.meta.pathsCount.toLocaleString()}{" "}
+                  {result.meta.pathsCount === 1 ? "path" : "paths"}{" "}
+                  <span>·</span> {result.palette.length}{" "}
+                  {result.palette.length === 1 ? "colour" : "colours"}
+                </span>
+                <span>
+                  {view === "compare"
+                    ? "Drag the divider to compare"
+                    : "Use + to inspect small details"}
+                </span>
+              </div>
+            </div>
+            <div className="result-actions">
+              <button className="text-button" onClick={store.reset}>
+                <ArrowLeft size={16} /> Convert another image
+              </button>
+              <div>
+                <button className="text-button" onClick={store.copySvg}>
+                  {store.copiedToast ? <Check size={16} /> : <Copy size={16} />}{" "}
+                  {store.copiedToast ? "Copied SVG" : "Copy SVG"}
+                </button>
+                {!store.detailed && (
+                  <button
+                    className="text-button detail-button"
+                    onClick={store.retryDetailed}
+                  >
+                    Trace finer details <ArrowRight size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="result-footnote">
+              {store.detailed
+                ? "Fine-detail tracing uses more colours and a tighter curve fit."
+                : "Missing a small detail? Try a finer trace. It may create a larger file."}{" "}
+              Lettering is saved as shapes.
+            </p>
+            <div className="sr-only" role="status">
+              {store.copiedToast ? "SVG copied to clipboard." : ""}
+            </div>
+            {store.actionError && (
+              <p className="action-error" role="alert">
+                <AlertCircle size={16} />
+                {store.actionError}
+              </p>
+            )}
+          </>
+        )}
+        {appState === "error" && (
+          <section className="error-state" role="alert">
+            <AlertCircle size={32} />
+            <h1>Let’s try another image.</h1>
+            <p>{store.errorMessage}</p>
+            <button
+              className="button button-primary"
+              onClick={() => {
+                store.reset();
+                choose();
+              }}
+            >
+              Choose another image <ArrowRight size={17} />
+            </button>
+            <button className="text-button" onClick={store.reset}>
+              Back to converter
+            </button>
+          </section>
+        )}
+      </main>
+      <footer className="app-footer">
+        <span>Made for the next size.</span>
+        <span>
+          <LockKeyhole size={13} /> Converted on your device
+        </span>
         <span>VectorForge</span>
-        <span>Local in-browser conversion · 100% Private</span>
       </footer>
-    </main>
+    </div>
   );
 }

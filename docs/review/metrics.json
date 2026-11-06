@@ -1,0 +1,50 @@
+[
+  {
+    "fixture": "brand-colours",
+    "previousError": 2.485,
+    "currentError": 0.095,
+    "improvement": "96.2%",
+    "milliseconds": 105,
+    "paths": 32
+  },
+  {
+    "fixture": "transparent-holes",
+    "previousError": 2.058,
+    "currentError": 0,
+    "improvement": "100.0%",
+    "milliseconds": 95,
+    "paths": 7
+  },
+  {
+    "fixture": "partial-opacity",
+    "previousError": 46.671,
+    "currentError": 0.13,
+    "improvement": "99.7%",
+    "milliseconds": 43,
+    "paths": 15
+  },
+  {
+    "fixture": "fine-lines",
+    "previousError": 1.511,
+    "currentError": 1.206,
+    "improvement": "20.2%",
+    "milliseconds": 32,
+    "paths": 2
+  },
+  {
+    "fixture": "small-lettering",
+    "previousError": 3.583,
+    "currentError": 0.096,
+    "improvement": "97.3%",
+    "milliseconds": 45,
+    "paths": 29
+  },
+  {
+    "fixture": "colour-illustration",
+    "previousError": 1.177,
+    "currentError": 0.385,
+    "improvement": "67.3%",
+    "milliseconds": 44,
+    "paths": 51
+  }
+]

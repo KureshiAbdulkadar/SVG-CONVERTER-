@@ -1,14 +1,9 @@
-export type ImageType = 'logo' | 'photo' | 'icon' | 'sketch' | 'illustration';
+export type ImageType = "logo" | "photo" | "icon" | "sketch" | "illustration";
 
-export type VectorPreset = 'sharp' | 'balanced' | 'smooth' | 'custom';
+export type VectorPreset = "sharp" | "balanced" | "smooth" | "custom";
 
 export type SemanticRole =
-  | 'background'
-  | 'main-shape'
-  | 'shadow'
-  | 'outline'
-  | 'detail'
-  | 'accent';
+  "background" | "main-shape" | "shadow" | "outline" | "detail" | "accent";
 
 export interface VectorParameters {
   preset: VectorPreset;
@@ -61,6 +56,8 @@ export interface BezierCurve {
 }
 
 export interface VectorPath {
+  /** Internal geometry transform, shared by its exported layer group. */
+  transform?: string;
   id: string;
   name?: string;
   d: string;
@@ -88,6 +85,7 @@ export interface VectorLayer {
   locked: boolean;
   expanded?: boolean;
   paths: VectorPath[];
+  transform?: string;
   depthRank: number; // 0 = back, N = front
   nodeCount: number;
 }
@@ -101,13 +99,18 @@ export interface VectorResult {
     imageType: ImageType;
     width: number;
     height: number;
+    workingWidth?: number;
+    workingHeight?: number;
+    upscaleFactor?: number;
+    coherentColours?: boolean;
     layersCount: number;
     pathsCount: number;
     nodesCount: number;
     sizeBytes: number;
     processingTimeMs: number;
-    symmetryDetected?: { axis: 'horizontal' | 'vertical'; error: number };
+    symmetryDetected?: { axis: "horizontal" | "vertical"; error: number };
   };
 }
 
-export type ExportFormat = 'svg' | 'svg-min' | 'figma-svg' | 'pdf' | 'eps' | 'dxf' | 'png-2x';
+export type ExportFormat =
+  "svg" | "svg-min" | "figma-svg" | "pdf" | "eps" | "dxf" | "png-2x";

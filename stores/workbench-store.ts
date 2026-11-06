@@ -1,25 +1,19 @@
-import { create } from 'zustand';
-import {
+import { create } from "zustand";
+import type {
   VectorParameters,
   VectorResult,
-} from '../lib/vector-engine/types';
-import { vectorizeImage } from '../lib/vector-engine';
+} from "../lib/vector-engine/types";
 
-export type AppState = 'idle' | 'converting' | 'done' | 'error';
-
-/**
- * HARD RULE: Exactly the "Balanced" preset parameters from PRESET_CONFIGS.
- * Output is byte-for-byte identical to what Balanced produces.
- */
+export type AppState = "idle" | "converting" | "done" | "error";
 export const BALANCED_PARAMETERS: VectorParameters = {
-  preset: 'balanced',
-  imageType: 'logo',
-  colorCount: 0,
+  preset: "balanced",
+  imageType: "logo",
+  colorCount: 64,
   preserveBrandColors: true,
   smoothness: 0.45,
   cornerSharpness: 0.8,
   detail: 0.8,
-  noiseRemoval: 1,
+  noiseRemoval: 0,
   preserveSymmetry: false,
   gridSnap: false,
   gridSize: 16,
@@ -27,256 +21,311 @@ export const BALANCED_PARAMETERS: VectorParameters = {
   mergeSimilarPaths: true,
   fillOverlap: true,
 };
-
 export function formatFileSize(bytes: number): string {
-  if (!bytes || bytes <= 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  if (!bytes || bytes <= 0) return "0 B";
+  const i = Math.min(3, Math.floor(Math.log(bytes) / Math.log(1024)));
+  return `${parseFloat((bytes / 1024 ** i).toFixed(1))} ${["B", "KB", "MB", "GB"][i]}`;
+}
+let activeWorker: Worker | null = null;
+let runId = 0;
+let copyTimer: ReturnType<typeof setTimeout> | undefined;
+function stopWork() {
+  runId++;
+  activeWorker?.terminate();
+  activeWorker = null;
+}
+function releaseUrl(url: string | null) {
+  if (url) URL.revokeObjectURL(url);
 }
 
 interface ConverterStore {
-  // State machine
   appState: AppState;
   errorMessage: string | null;
-
-  // File & image data
+  actionError: string | null;
   fileName: string;
   imageDataUrl: string | null;
   imageWidth: number;
   imageHeight: number;
-
-  // Conversion result
   outputSvg: string | null;
   svgBlobUrl: string | null;
   svgSizeBytes: number;
-
-  // Progress
+  result: VectorResult | null;
+  processingStage: string;
   processingProgress: number;
-
-  // Comparison slider
   splitPosition: number;
-
-  // Feedback toast
   copiedToast: boolean;
-
-  // Actions
+  detailed: boolean;
   convertFile: (file: File) => Promise<void>;
-  convertDataUrl: (dataUrl: string, name: string) => Promise<void>;
+  convertDataUrl: (
+    dataUrl: string,
+    name: string,
+    detailed?: boolean,
+  ) => Promise<void>;
+  retryDetailed: () => void;
   reset: () => void;
   setSplitPosition: (pos: number) => void;
   copySvg: () => Promise<void>;
   downloadSvg: () => void;
 }
-
 export const useWorkbenchStore = create<ConverterStore>((set, get) => ({
-  appState: 'idle',
+  appState: "idle",
   errorMessage: null,
-
-  fileName: '',
+  actionError: null,
+  fileName: "",
   imageDataUrl: null,
   imageWidth: 0,
   imageHeight: 0,
-
   outputSvg: null,
   svgBlobUrl: null,
   svgSizeBytes: 0,
-
+  result: null,
+  processingStage: "",
   processingProgress: 0,
   splitPosition: 50,
   copiedToast: false,
-
+  detailed: false,
   reset: () => {
-    const { svgBlobUrl } = get();
-    if (svgBlobUrl) {
-      try {
-        URL.revokeObjectURL(svgBlobUrl);
-      } catch (e) {
-        // Ignore revoke errors
-      }
-    }
-
+    stopWork();
+    clearTimeout(copyTimer);
+    releaseUrl(get().svgBlobUrl);
     set({
-      appState: 'idle',
+      appState: "idle",
       errorMessage: null,
-      fileName: '',
+      actionError: null,
+      fileName: "",
       imageDataUrl: null,
       imageWidth: 0,
       imageHeight: 0,
       outputSvg: null,
       svgBlobUrl: null,
       svgSizeBytes: 0,
+      result: null,
+      processingStage: "",
       processingProgress: 0,
       splitPosition: 50,
       copiedToast: false,
+      detailed: false,
     });
   },
-
-  setSplitPosition: (pos: number) => {
-    set({ splitPosition: Math.max(0, Math.min(100, pos)) });
-  },
-
-  convertFile: async (file: File) => {
-    if (!file) return;
-
-    // Validate type
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/bmp'];
-    if (!validTypes.includes(file.type.toLowerCase()) && !/\.(png|jpe?g|webp|bmp)$/i.test(file.name)) {
+  setSplitPosition: (pos) =>
+    set({ splitPosition: Math.max(0, Math.min(100, pos)) }),
+  convertFile: async (file) => {
+    if (get().appState === "converting") return;
+    if (
+      !/^image\/(png|jpeg|jpg|webp|bmp)$/i.test(file.type) &&
+      !/\.(png|jpe?g|webp|bmp)$/i.test(file.name)
+    ) {
       set({
-        appState: 'error',
-        errorMessage: "We couldn't read this format. Please upload a PNG, JPG, or WebP image under 25 MB.",
+        appState: "error",
+        errorMessage: "Choose a PNG, JPG, WebP or BMP image.",
       });
       return;
     }
-
-    // Validate size (max 25 MB)
     if (file.size > 25 * 1024 * 1024) {
       set({
-        appState: 'error',
-        errorMessage: 'This image is too large. Please choose an image under 25 MB.',
+        appState: "error",
+        errorMessage:
+          "This file exceeds 25 MB. Export a smaller image and try again.",
       });
       return;
     }
-
-    const reader = new FileReader();
-    reader.onerror = () => {
-      set({
-        appState: 'error',
-        errorMessage: "We couldn't read this file from your device. Please try another image.",
-      });
-    };
-
-    reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string;
-      if (dataUrl) {
-        await get().convertDataUrl(dataUrl, file.name);
-      }
-    };
-
-    reader.readAsDataURL(file);
-  },
-
-  convertDataUrl: async (dataUrl: string, name: string) => {
-    const { svgBlobUrl: oldBlobUrl } = get();
-    if (oldBlobUrl) {
-      try {
-        URL.revokeObjectURL(oldBlobUrl);
-      } catch (e) {
-        // ignore
-      }
-    }
-
+    stopWork();
+    const id = runId;
     set({
-      appState: 'converting',
+      appState: "converting",
+      fileName: file.name,
+      processingStage: "Reading your image…",
       errorMessage: null,
+    });
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () =>
+          reject(
+            new Error("This file could not be read. Please select it again."),
+          );
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+      if (id === runId) await get().convertDataUrl(dataUrl, file.name);
+    } catch (error) {
+      if (id === runId) set({ appState: "error", errorMessage: String(error) });
+    }
+  },
+  convertDataUrl: async (dataUrl, name, detailed = false) => {
+    stopWork();
+    const id = runId;
+    clearTimeout(copyTimer);
+    releaseUrl(get().svgBlobUrl);
+    set({
+      appState: "converting",
+      errorMessage: null,
+      actionError: null,
       fileName: name,
       imageDataUrl: dataUrl,
       outputSvg: null,
       svgBlobUrl: null,
+      result: null,
       svgSizeBytes: 0,
       processingProgress: 15,
       splitPosition: 50,
       copiedToast: false,
+      detailed,
+      processingStage: "Reading your image…",
     });
-
     try {
-      // 1. Load image to extract dimensions and pixel buffer
       const img = new Image();
-      img.src = dataUrl;
-
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = () => reject(new Error('Invalid image data'));
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () =>
+          reject(
+            new Error(
+              "This image could not be decoded. Try exporting it as PNG.",
+            ),
+          );
+        img.src = dataUrl;
       });
-
-      const width = img.naturalWidth || img.width;
-      const height = img.naturalHeight || img.height;
-
-      if (!width || !height) {
-        throw new Error('Image dimensions could not be read');
-      }
-
-      const canvas = document.createElement('canvas');
+      if (id !== runId) return;
+      const width = img.naturalWidth,
+        height = img.naturalHeight;
+      if (!width || !height)
+        throw new Error(
+          "This image has no readable dimensions. Try another file.",
+        );
+      if (width * height > 4_000_000 || width > 8192 || height > 8192)
+        throw new Error(
+          "This image is too large to trace safely. Resize it to 4 megapixels or less, with neither side above 8,192 pixels.",
+        );
+      const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Could not initialize canvas context');
-
+      const ctx = canvas.getContext("2d");
+      if (!ctx)
+        throw new Error(
+          "Your browser could not create an image canvas. Please try again.",
+        );
       ctx.drawImage(img, 0, 0);
-      const imgData = ctx.getImageData(0, 0, width, height);
-
+      const image = ctx.getImageData(0, 0, width, height);
       set({
         imageWidth: width,
         imageHeight: height,
-        processingProgress: 50,
+        processingProgress: 35,
+        processingStage: "Preparing your vector…",
       });
-
-      // 2. Call conversion engine with exact BALANCED_PARAMETERS
-      const result = await vectorizeImage(
-        imgData.data,
-        width,
-        height,
-        BALANCED_PARAMETERS
+      const worker = new Worker(
+        new URL("../lib/vector-engine/vectorize.worker.ts", import.meta.url),
+        { type: "module" },
       );
-
-      if (!result || !result.svg) {
-        throw new Error('Vectorization did not produce SVG output');
-      }
-
-      // 3. Create blob URL for fast, non-blocking preview render
-      const svgBlob = new Blob([result.svg], { type: 'image/svg+xml;charset=utf-8' });
-      const newBlobUrl = URL.createObjectURL(svgBlob);
-      const sizeBytes = svgBlob.size;
-
-      set({
-        appState: 'done',
-        outputSvg: result.svg,
-        svgBlobUrl: newBlobUrl,
-        svgSizeBytes: sizeBytes,
-        processingProgress: 100,
-      });
-    } catch (err: any) {
-      console.error('Vectorization error:', err);
-      set({
-        appState: 'error',
-        errorMessage: "We couldn't convert this image. Please try a PNG or JPG under 25 MB.",
-      });
+      activeWorker = worker;
+      worker.onmessage = (event) => {
+        if (id !== runId) return;
+        if (event.data.stage) {
+          set({ processingStage: event.data.stage, processingProgress: 50 });
+          return;
+        }
+        worker.terminate();
+        activeWorker = null;
+        if (event.data.error) {
+          set({
+            appState: "error",
+            errorMessage:
+              "The image could not be traced. Try a smaller PNG or a simpler image.",
+          });
+          return;
+        }
+        const result: VectorResult = event.data.result;
+        if (!result.layers.length) {
+          set({
+            appState: "error",
+            errorMessage:
+              "No visible shapes were found. Choose an image with visible artwork.",
+          });
+          return;
+        }
+        const blob = new Blob([result.svg], {
+          type: "image/svg+xml;charset=utf-8",
+        });
+        set({
+          appState: "done",
+          result,
+          outputSvg: result.svg,
+          svgBlobUrl: URL.createObjectURL(blob),
+          svgSizeBytes: blob.size,
+          processingProgress: 100,
+        });
+      };
+      worker.onerror = () => {
+        if (id !== runId) return;
+        worker.terminate();
+        activeWorker = null;
+        set({
+          appState: "error",
+          errorMessage:
+            "The conversion stopped unexpectedly. Please try a smaller image.",
+        });
+      };
+      worker.postMessage(
+        {
+          pixels: image.data.buffer,
+          width,
+          height,
+          params: {
+            ...BALANCED_PARAMETERS,
+            preset: detailed ? "sharp" : "balanced",
+            colorCount: detailed ? 128 : 64,
+          },
+        },
+        [image.data.buffer],
+      );
+    } catch (error) {
+      if (id === runId)
+        set({
+          appState: "error",
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : "Please try another image.",
+        });
     }
   },
-
+  retryDetailed: () => {
+    const { imageDataUrl, fileName } = get();
+    if (imageDataUrl) void get().convertDataUrl(imageDataUrl, fileName, true);
+  },
   copySvg: async () => {
     const { outputSvg } = get();
     if (!outputSvg) return;
-
     try {
       await navigator.clipboard.writeText(outputSvg);
-      set({ copiedToast: true });
-      setTimeout(() => {
-        set({ copiedToast: false });
-      }, 2000);
-    } catch (err) {
-      console.error('Failed to copy SVG to clipboard:', err);
+      clearTimeout(copyTimer);
+      set({ copiedToast: true, actionError: null });
+      copyTimer = setTimeout(() => set({ copiedToast: false }), 2000);
+    } catch {
+      set({
+        actionError:
+          "Clipboard access is unavailable. Use Download SVG to save your file.",
+      });
     }
   },
-
   downloadSvg: () => {
     const { outputSvg, fileName } = get();
     if (!outputSvg) return;
-
     try {
-      const blob = new Blob([outputSvg], { type: 'image/svg+xml;charset=utf-8' });
-      const baseName = fileName ? fileName.replace(/\.[^/.]+$/, '') : 'vector';
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const url = URL.createObjectURL(
+        new Blob([outputSvg], { type: "image/svg+xml" }),
+      );
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `${baseName}.svg`;
+      a.download = `${fileName.replace(/\.[^/.]+$/, "") || "vector"}.svg`;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Failed to download SVG:', err);
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      set({ actionError: null });
+    } catch {
+      set({
+        actionError: "The download could not start. Try Copy SVG instead.",
+      });
     }
   },
 }));

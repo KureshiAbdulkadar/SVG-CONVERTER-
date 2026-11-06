@@ -1,4 +1,8 @@
 /**
+ * Legacy sharpening/upscaling implementation, retained for historical fidelity
+ * comparisons. The live converter uses the alpha-safe sampler in preprocess.ts.
+ */
+/**
  * High-Definition Image Pre-Processor & Edge-Preserving Super-Resolution Upscaler
  * 
  * Upscales low-resolution or micro-pixelated images (e.g. portraits, mountain landscapes,

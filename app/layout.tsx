@@ -1,10 +1,10 @@
-import type { Metadata } from 'next';
-import './globals.css';
+import type { Metadata } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: 'VectorForge — Precision Semantic AI Vectorizer',
+  title: "VectorForge — Image to SVG",
   description:
-    'Transform pixel images (PNG, JPG, WebP) into production-ready, semantic, layered SVG/PDF/EPS vectors in under 1 second.',
+    "Convert PNG, JPG and WebP images to editable SVG files locally in your browser. Compare, inspect layers and download.",
 };
 
 export default function RootLayout({
@@ -13,10 +13,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-background text-foreground antialiased selection:bg-indigo-600 selection:text-white">
-        {children}
-      </body>
+    <html lang="en">
+      <body>{children}</body>
     </html>
   );
 }

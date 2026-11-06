@@ -1,0 +1,90 @@
+[
+  {
+    "fixture": "curved-logo",
+    "previousError": 1.464,
+    "currentError": 0.378,
+    "previousLeaks": 0,
+    "currentLeaks": 0,
+    "scale": 4,
+    "paths": 3,
+    "nodes": 717,
+    "ms": 148
+  },
+  {
+    "fixture": "shared-colours",
+    "previousError": 2.245,
+    "currentError": 0.794,
+    "previousLeaks": 2365,
+    "currentLeaks": 8,
+    "scale": 4,
+    "paths": 8,
+    "nodes": 1970,
+    "ms": 173
+  },
+  {
+    "fixture": "thin-bridges",
+    "previousError": 2.286,
+    "currentError": 0.841,
+    "previousLeaks": 0,
+    "currentLeaks": 0,
+    "scale": 4,
+    "paths": 3,
+    "nodes": 735,
+    "ms": 91
+  },
+  {
+    "fixture": "small-type",
+    "previousError": 2.575,
+    "currentError": 2.575,
+    "previousLeaks": 0,
+    "currentLeaks": 0,
+    "scale": 1,
+    "paths": 1,
+    "nodes": 255,
+    "ms": 12
+  },
+  {
+    "fixture": "opaque-art",
+    "previousError": 1.783,
+    "currentError": 0.816,
+    "previousLeaks": 2733,
+    "currentLeaks": 0,
+    "scale": 4,
+    "paths": 5,
+    "nodes": 734,
+    "ms": 117
+  },
+  {
+    "fixture": "translucent",
+    "previousError": 0.471,
+    "currentError": 0.471,
+    "previousLeaks": 0,
+    "currentLeaks": 0,
+    "scale": 1,
+    "paths": 15,
+    "nodes": 728,
+    "ms": 21
+  },
+  {
+    "fixture": "small-type-opaque",
+    "previousError": 5.935,
+    "currentError": 5.679,
+    "previousLeaks": 4100,
+    "currentLeaks": 0,
+    "scale": 1,
+    "paths": 19,
+    "nodes": 1914,
+    "ms": 24
+  },
+  {
+    "fixture": "compressed-jpeg",
+    "previousError": 13.21,
+    "currentError": 10.095,
+    "previousLeaks": 18951,
+    "currentLeaks": 0,
+    "scale": 1,
+    "paths": 65,
+    "nodes": 8818,
+    "ms": 73
+  }
+]
